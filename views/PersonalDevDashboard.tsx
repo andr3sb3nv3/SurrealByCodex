@@ -42,7 +42,6 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
 }) => {
   const [rawData, setRawData] = useState<DashboardDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
-  const [populating, setPopulating] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
   const [permissionError, setPermissionError] = useState(false);
