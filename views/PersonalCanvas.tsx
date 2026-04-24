@@ -39,6 +39,8 @@ const PersonalCanvas: React.FC<CanvasProps> = ({
   readOnly, viewingFriendName, onExitSharedView, onLogout,
   showDevControls = true
 }) => {
+  type GoalTask = { tarea: string; categoria?: string };
+
   const t = TRANSLATIONS[language];
   
   // ALL AVAILABLE METRICS CONFIGURATION
@@ -232,7 +234,7 @@ const PersonalCanvas: React.FC<CanvasProps> = ({
 
           const reconstructedGoals: Goal[] = [];
 
-          const createGoalObj = (t: any, isCompleted: boolean) => ({
+          const createGoalObj = (t: GoalTask, isCompleted: boolean): Goal => ({
             id: Math.random(),
             text: t.tarea,
             category: t.categoria || 'General',
@@ -240,8 +242,8 @@ const PersonalCanvas: React.FC<CanvasProps> = ({
             resourceKey: 'general'
           });
 
-          pendingTasks.forEach((t: any) => reconstructedGoals.push(createGoalObj(t, false)));
-          completedTasks.forEach((t: any) => reconstructedGoals.push(createGoalObj(t, true)));
+          pendingTasks.forEach((t: GoalTask) => reconstructedGoals.push(createGoalObj(t, false)));
+          completedTasks.forEach((t: GoalTask) => reconstructedGoals.push(createGoalObj(t, true)));
 
           setGoals(reconstructedGoals);
 
@@ -442,11 +444,12 @@ const PersonalCanvas: React.FC<CanvasProps> = ({
         }
       }, 60000);
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      if (err?.name === 'NotAllowedError' || err?.name === 'SecurityError') {
+      const errorName = typeof err === 'object' && err !== null && 'name' in err ? String((err as { name?: string }).name) : '';
+      if (errorName === 'NotAllowedError' || errorName === 'SecurityError') {
         showToast("Bloqueaste el acceso al micrófono. Podés reactivarlo desde el candado de la barra de direcciones.", 'error');
-      } else if (err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError') {
+      } else if (errorName === 'NotFoundError' || errorName === 'DevicesNotFoundError') {
         showToast("No encontramos ningún micrófono en este dispositivo.", 'error');
       } else {
         showToast(t.audio.permissionError, 'error');
@@ -520,7 +523,7 @@ const PersonalCanvas: React.FC<CanvasProps> = ({
     const reflectionToSave = reflection;
     const audioToSave = audioNote;
 
-    const exportObject: any = {
+    const exportObject: Record<string, unknown> = {
       fecha: currentDate,
       timestamp: Date.now(),
       reflexion: reflectionToSave,
@@ -594,7 +597,7 @@ const PersonalCanvas: React.FC<CanvasProps> = ({
 
     if (!isGuest && user && !readOnly) {
       try {
-        const exportObject: any = {
+        const exportObject: Record<string, unknown> = {
           fecha: currentDate,
           timestamp: Date.now(),
           reflexion: "",
