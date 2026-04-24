@@ -9,7 +9,7 @@ import { signOut, updateProfile } from 'firebase/auth';
 import { collection, doc, setDoc, deleteDoc, getDoc, onSnapshot, addDoc, getDocs } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
 import CompanyHeader from '../components/CompanyHeader';
-import { UserProfileProps, Language, Theme, IncomingConnection } from '../types';
+import { UserProfileProps, Language, Theme, IncomingConnection, OutgoingConnection } from '../types';
 import Toast from '../components/ui/Toast';
 import Modal from '../components/ui/Modal';
 import { TRANSLATIONS } from '../translations';
@@ -34,6 +34,17 @@ const DEMO_1_META = {
   initial: 'D1'
 };
 
+const COLLECTIONS = {
+  users: 'users',
+  dailyLogs: 'daily_logs',
+  outgoing: 'outgoing_connections',
+  incoming: 'incoming_connections',
+  preferences: 'user_settings',
+  preferencesDoc: 'preferences',
+  publicEmails: 'public_emails',
+  pendingInvites: 'pending_invites',
+} as const;
+
 const LANGUAGES: { code: Language; label: string }[] = [
   { code: 'es', label: 'Español' },
   { code: 'en', label: 'English' },
@@ -44,7 +55,7 @@ const LANGUAGES: { code: Language; label: string }[] = [
   { code: 'zh', label: '中文' },
 ];
 
-const THEMES: { code: Theme; icon: any; labelKey: string }[] = [
+const THEMES: { code: Theme; icon: React.ComponentType<{ size?: number; className?: string }>; labelKey: string }[] = [
   { code: 'light', icon: Sun, labelKey: 'light' },
   { code: 'dark', icon: Moon, labelKey: 'dark' },
   { code: 'system', icon: Monitor, labelKey: 'system' },
@@ -183,7 +194,10 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
     const unsubOutgoing = onSnapshot(outgoingRef, (snapshot) => {
         const emails: string[] = [];
         snapshot.forEach(doc => {
-            if (doc.data().email) emails.push(doc.data().email);
+            const data = doc.data() as Partial<OutgoingConnection>;
+            if (typeof data.email === 'string' && data.email.trim() !== '') {
+              emails.push(data.email);
+            }
         });
         setSharedUsers(emails);
     }, (error) => console.error("Error fetching outgoing:", error));
