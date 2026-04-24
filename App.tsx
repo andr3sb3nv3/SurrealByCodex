@@ -84,6 +84,13 @@ const DEMO_USER_5 = createDemoUser({
   creationTime: new Date(Date.now() - 366 * 86400000).toISOString(),
 });
 
+const DEMO_USER_6 = createDemoUser({
+  uid: 'DemoMetricas2222222222',
+  displayName: 'Demo Métricas 2222222222',
+  email: 'demo6@surreal.horizons',
+  creationTime: new Date(Date.now() - 366 * 86400000).toISOString(),
+});
+
 export default function App() {
   const [view, setView] = useState<'canvas' | 'dashboard' | 'comments' | 'profile' | 'yearPixels' | 'clinical'>('canvas');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -163,8 +170,8 @@ export default function App() {
       // Demo 1 is ALWAYS treated as a new user starting the app
       setIsOnboarding(true);
       setNeedsProfile(false);
-    } else if (demoMode === 2 || demoMode === 3 || demoMode === 4 || demoMode === 5) {
-      // Demos 2..5 skip onboarding (Historical data views)
+    } else if (demoMode === 2 || demoMode === 3 || demoMode === 4 || demoMode === 5 || demoMode === 6) {
+      // Demos 2..6 skip onboarding (Historical data views)
       setIsOnboarding(false);
       setNeedsProfile(false);
     } else if (currentRealUser) {
@@ -365,6 +372,7 @@ export default function App() {
       case 3: return DEMO_USER_3;
       case 4: return DEMO_USER_4;
       case 5: return DEMO_USER_5;
+      case 6: return DEMO_USER_6;
       default: return currentRealUser;
     }
   }, [sharedUserViewing, demoMode, currentRealUser]);
@@ -513,6 +521,7 @@ export default function App() {
                   { mode: 3, label: 'Demo 3 · Racha perfecta', hint: 'Registros diarios' },
                   { mode: 4, label: 'Demo 4 · Inconsistente', hint: 'Racha irregular' },
                   { mode: 5, label: 'Demo 5 · Métricas clínicas', hint: '365 días · 10 módulos' },
+                  { mode: 6, label: 'Demo 6 · Dashboard + Clínico', hint: '365 días completos' },
                 ].map(({ mode, label, hint }) => {
                   const active = demoMode === mode;
                   return (

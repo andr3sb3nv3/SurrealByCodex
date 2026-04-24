@@ -5,7 +5,7 @@ import {
   Activity, Award, Tag, UploadCloud, CheckCircle, Trash2, Search,
   Shield, UserPlus, Info, Users, Eye, Loader2, Link2, Check, ChevronDown, ListChecks, Key, Grid, Plus, Moon, Sun, Monitor
 } from 'lucide-react';
-import { signOut } from 'firebase/auth';
+import { signOut, updateProfile } from 'firebase/auth';
 import { collection, doc, setDoc, deleteDoc, getDoc, onSnapshot, addDoc, getDocs } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
 import CompanyHeader from '../components/CompanyHeader';
@@ -207,8 +207,18 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
       setIsUploading(true);
       setTimeout(() => {
         const reader = new FileReader();
-        reader.onloadend = () => {
-          setAvatar(reader.result as string);
+        reader.onloadend = async () => {
+          const image = reader.result as string;
+          setAvatar(image);
+          try {
+            await updateProfile(user, { photoURL: image });
+            if (db) {
+              await setDoc(doc(db, 'users', user.uid), { photoURL: image }, { merge: true });
+              await setDoc(doc(db, 'users', user.uid, 'user_settings', 'preferences'), { photoURL: image, updatedAt: Date.now() }, { merge: true });
+            }
+          } catch (error) {
+            console.error('Error saving photo', error);
+          }
           setIsUploading(false);
           showToast(t.uploadPhoto, 'success');
         };
