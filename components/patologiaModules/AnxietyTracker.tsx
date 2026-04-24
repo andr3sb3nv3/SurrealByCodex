@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Zap, MessageSquare, CheckCircle2, Loader2 } from 'lucide-react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
+import { MODULE_COLLECTIONS } from './shared';
 import { PatologiaModuleProps } from '../../utils/patologiaModules';
 import { Language } from '../../types';
 
@@ -102,7 +103,7 @@ const AnxietyTracker: React.FC<PatologiaModuleProps> = ({ userId, dateKey, readO
       }
       try {
         setStatus('loading');
-        const ref = doc(db, 'users', userId, 'deepClinicalLogsAnxiety', dateKey);
+        const ref = doc(db, MODULE_COLLECTIONS.users, userId, MODULE_COLLECTIONS.anxiety, dateKey);
         const snap = await getDoc(ref);
         if (cancelled) return;
         if (snap.exists()) {
@@ -126,11 +127,11 @@ const AnxietyTracker: React.FC<PatologiaModuleProps> = ({ userId, dateKey, readO
     setStatus('saving');
     setErrorMsg(null);
     try {
-      const ref = doc(db, 'users', userId, 'deepClinicalLogsAnxiety', dateKey);
+      const ref = doc(db, MODULE_COLLECTIONS.users, userId, MODULE_COLLECTIONS.anxiety, dateKey);
       await setDoc(ref, { ...entry, dateKey, updatedAt: Date.now() }, { merge: true });
       setStatus('saved');
       setTimeout(() => setStatus('idle'), 2000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('AnxietyTracker save error', err);
       setErrorMsg(t.errorSaving);
       setStatus('error');
