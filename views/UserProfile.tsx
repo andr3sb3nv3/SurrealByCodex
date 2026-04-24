@@ -9,7 +9,7 @@ import { signOut, updateProfile } from 'firebase/auth';
 import { collection, doc, setDoc, deleteDoc, getDoc, onSnapshot, addDoc, getDocs } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
 import CompanyHeader from '../components/CompanyHeader';
-import { UserProfileProps, Language, Theme } from '../types';
+import { UserProfileProps, Language, Theme, IncomingConnection, OutgoingConnection } from '../types';
 import Toast from '../components/ui/Toast';
 import Modal from '../components/ui/Modal';
 import { TRANSLATIONS } from '../translations';
@@ -34,6 +34,17 @@ const DEMO_1_META = {
   initial: 'D1'
 };
 
+const COLLECTIONS = {
+  users: 'users',
+  dailyLogs: 'daily_logs',
+  outgoing: 'outgoing_connections',
+  incoming: 'incoming_connections',
+  preferences: 'user_settings',
+  preferencesDoc: 'preferences',
+  publicEmails: 'public_emails',
+  pendingInvites: 'pending_invites',
+} as const;
+
 const LANGUAGES: { code: Language; label: string }[] = [
   { code: 'es', label: 'Español' },
   { code: 'en', label: 'English' },
@@ -44,7 +55,7 @@ const LANGUAGES: { code: Language; label: string }[] = [
   { code: 'zh', label: '中文' },
 ];
 
-const THEMES: { code: Theme; icon: any; labelKey: string }[] = [
+const THEMES: { code: Theme; icon: React.ComponentType<{ size?: number; className?: string }>; labelKey: string }[] = [
   { code: 'light', icon: Sun, labelKey: 'light' },
   { code: 'dark', icon: Moon, labelKey: 'dark' },
   { code: 'system', icon: Monitor, labelKey: 'system' },
@@ -78,7 +89,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
   // Sharing State
   const [shareEmail, setShareEmail] = useState("");
   const [sharedUsers, setSharedUsers] = useState<string[]>([]); // Outgoing
-  const [incomingShares, setIncomingShares] = useState<any[]>([]); // Incoming
+  const [incomingShares, setIncomingShares] = useState<IncomingConnection[]>([]); // Incoming
   const [isSearchingUser, setIsSearchingUser] = useState(false);
   const [isLoadingConnections, setIsLoadingConnections] = useState(false);
 
@@ -86,14 +97,22 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
 
   const t = TRANSLATIONS[language];
 
+  // Keep avatar aligned with currently selected user
+  useEffect(() => {
+    setAvatar(user?.photoURL || null);
+  }, [user?.uid, user?.photoURL]);
+
   // Calculate Streak & Fetch Data
   useEffect(() => {
     if (!user || !db) return;
+    let cancelled = false;
+    const currentUid = user.uid;
 
     const fetchStats = async () => {
       try {
-        const logsRef = collection(db, 'users', user.uid, 'daily_logs');
+        const logsRef = collection(db, COLLECTIONS.users, currentUid, COLLECTIONS.dailyLogs);
         const snapshot = await getDocs(logsRef);
+        if (cancelled) return;
         
         const datesSet = new Set<string>();
         snapshot.forEach(doc => {
@@ -101,6 +120,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
             datesSet.add(doc.id);
         });
 
+        if (cancelled) return;
         setTotalLogs(datesSet.size);
 
         // Calculate Streak
@@ -119,7 +139,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
             if (datesSet.has(yesterdayStr)) {
                 checkDate = subDays(today, 1);
             } else {
-                setStreak(0);
+                if (!cancelled) setStreak(0);
                 return; 
             }
         }
@@ -136,7 +156,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
             }
         }
         
-        setStreak(currentStreak);
+        if (!cancelled) setStreak(currentStreak);
 
       } catch (error) {
         console.error("Error calculating streak:", error);
@@ -144,6 +164,9 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
     };
 
     fetchStats();
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
   // Fetch Connections on Load
@@ -156,24 +179,32 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
     setIsLoadingConnections(true);
     
     // 1. Listen to Outgoing Shares (Who I shared with) -> 'outgoing_connections'
-    const outgoingRef = collection(db, 'users', user.uid, 'outgoing_connections');
+    const outgoingRef = collection(db, COLLECTIONS.users, user.uid, COLLECTIONS.outgoing);
     const unsubOutgoing = onSnapshot(outgoingRef, (snapshot) => {
         const emails: string[] = [];
         snapshot.forEach(doc => {
-            if (doc.data().email) emails.push(doc.data().email);
+            const data = doc.data() as Partial<OutgoingConnection>;
+            if (typeof data.email === 'string' && data.email.trim() !== '') {
+              emails.push(data.email);
+            }
         });
         setSharedUsers(emails);
     }, (error) => console.error("Error fetching outgoing:", error));
 
     // 2. Listen to Incoming Shares (Who shared with me) -> 'incoming_connections'
-    const incomingRef = collection(db, 'users', user.uid, 'incoming_connections');
+    const incomingRef = collection(db, COLLECTIONS.users, user.uid, COLLECTIONS.incoming);
     const unsubIncoming = onSnapshot(incomingRef, (snapshot) => {
-        const shares: any[] = [];
+        const shares: IncomingConnection[] = [];
         snapshot.forEach(doc => {
-            const data = doc.data();
+            const data = doc.data() as Partial<IncomingConnection>;
             // Ensure we have minimal data to display
-            if (data.ownerUid) {
-                shares.push(data);
+            if (typeof data.ownerUid === 'string') {
+                shares.push({
+                  ownerUid: data.ownerUid,
+                  displayName: data.displayName,
+                  email: data.email,
+                  initial: data.initial,
+                });
             }
         });
         setIncomingShares(shares);
@@ -213,8 +244,8 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
           try {
             await updateProfile(user, { photoURL: image });
             if (db) {
-              await setDoc(doc(db, 'users', user.uid), { photoURL: image }, { merge: true });
-              await setDoc(doc(db, 'users', user.uid, 'user_settings', 'preferences'), { photoURL: image, updatedAt: Date.now() }, { merge: true });
+              await setDoc(doc(db, COLLECTIONS.users, user.uid), { photoURL: image }, { merge: true });
+              await setDoc(doc(db, COLLECTIONS.users, user.uid, COLLECTIONS.preferences, COLLECTIONS.preferencesDoc), { photoURL: image, updatedAt: Date.now() }, { merge: true });
             }
           } catch (error) {
             console.error('Error saving photo', error);
@@ -263,7 +294,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
         try {
             // 1. Write to local outgoing collection
             // Stores the entered email as the ID for easy lookup/deletion by email
-            await setDoc(doc(db, 'users', user.uid, 'outgoing_connections', normalizedEmail), {
+            await setDoc(doc(db, COLLECTIONS.users, user.uid, COLLECTIONS.outgoing, normalizedEmail), {
                 email: normalizedEmail,
                 addedAt: Date.now()
             });
@@ -277,7 +308,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
             // Step B: If not demo, try to find in 'public_emails' directory
             if (!targetUid) {
               try {
-                const publicDoc = await getDoc(doc(db, 'public_emails', normalizedEmail));
+                const publicDoc = await getDoc(doc(db, COLLECTIONS.publicEmails, normalizedEmail));
                 if (publicDoc.exists()) {
                   targetUid = publicDoc.data().uid;
                   foundInPublic = true;
@@ -291,7 +322,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
             let reciprocalSuccess = false;
             if (targetUid) {
                try {
-                   await setDoc(doc(db, 'users', targetUid, 'incoming_connections', user.uid), {
+                   await setDoc(doc(db, COLLECTIONS.users, targetUid, COLLECTIONS.incoming, user.uid), {
                      ownerUid: user.uid,
                      displayName: user.displayName || 'Usuario',
                      email: user.email || '',
@@ -316,7 +347,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
                 // NOT FOUND (New User / Not Logged In) -> Create Pending Invitation
                 try {
                   // Using addDoc allows Firestore to generate a safe ID, avoiding character issues with emails
-                  await addDoc(collection(db, 'pending_invites'), {
+                  await addDoc(collection(db, COLLECTIONS.pendingInvites), {
                     toEmail: normalizedEmail,
                     fromUid: user.uid,
                     fromName: user.displayName || 'Usuario',
@@ -355,7 +386,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
 
     try {
         // 1. Remove from my 'outgoing' list
-        await deleteDoc(doc(db, 'users', user.uid, 'outgoing_connections', normalizedEmail));
+        await deleteDoc(doc(db, COLLECTIONS.users, user.uid, COLLECTIONS.outgoing, normalizedEmail));
         
         // 2. RECIPROCAL DELETE: Remove from recipient's 'incoming' list
         let recipientUid = DEMO_UID_MAP[normalizedEmail];
@@ -363,7 +394,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
         // Try public lookup if not demo
         if (!recipientUid) {
            try {
-              const publicDoc = await getDoc(doc(db, 'public_emails', normalizedEmail));
+              const publicDoc = await getDoc(doc(db, COLLECTIONS.publicEmails, normalizedEmail));
               if (publicDoc.exists()) recipientUid = publicDoc.data().uid;
            } catch(e) {}
         }
@@ -371,7 +402,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
         if (recipientUid) {
             try {
                 // Delete the document in the recipient's incoming_connections that corresponds to ME (sender UID)
-                await deleteDoc(doc(db, 'users', recipientUid, 'incoming_connections', user.uid));
+                await deleteDoc(doc(db, COLLECTIONS.users, recipientUid, COLLECTIONS.incoming, user.uid));
             } catch (reciprocalError) {
                 console.error("Reciprocal delete failed:", reciprocalError);
                 // We don't block the UI if this fails
@@ -389,7 +420,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
       if (!db || !user) return;
       try {
           // Removes the shared profile from "Shared With Me"
-          await deleteDoc(doc(db, 'users', user.uid, 'incoming_connections', ownerUid));
+          await deleteDoc(doc(db, COLLECTIONS.users, user.uid, COLLECTIONS.incoming, ownerUid));
           showToast(t.incomingShareRemoved, 'success');
       } catch (e) {
           console.error("Error removing incoming share:", e);
@@ -401,7 +432,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
     if (!db || !user) return;
     try {
       // 1. Write to My Incoming Connections (From Demo 1)
-      await setDoc(doc(db, 'users', user.uid, 'incoming_connections', DEMO_1_META.uid), {
+      await setDoc(doc(db, COLLECTIONS.users, user.uid, COLLECTIONS.incoming, DEMO_1_META.uid), {
          ownerUid: DEMO_1_META.uid,
          displayName: DEMO_1_META.displayName,
          email: DEMO_1_META.email,
@@ -410,7 +441,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
 
       // 2. Write to Demo 1 Outgoing Connections (To Me)
       if (user.email) {
-          await setDoc(doc(db, 'users', DEMO_1_META.uid, 'outgoing_connections', user.email.toLowerCase()), {
+          await setDoc(doc(db, COLLECTIONS.users, DEMO_1_META.uid, COLLECTIONS.outgoing, user.email.toLowerCase()), {
              email: user.email.toLowerCase(),
              addedAt: Date.now()
           });
@@ -430,9 +461,9 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
     }
   };
 
-  const handleViewSharedProfile = (share: any) => {
+  const handleViewSharedProfile = (share: IncomingConnection) => {
     if (share.ownerUid && onViewSharedProfile) {
-        onViewSharedProfile(share.ownerUid, share.displayName || share.email, share.email);
+        onViewSharedProfile(share.ownerUid, share.displayName || share.email || 'Usuario', share.email || '');
     }
   };
 
