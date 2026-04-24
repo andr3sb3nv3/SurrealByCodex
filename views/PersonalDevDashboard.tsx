@@ -12,7 +12,7 @@ import Card from '../components/ui/Card';
 import HistoricalMetricView from '../components/HistoricalMetricView';
 import { getMonthName, formatDateFriendly } from '../utils/dateUtils';
 import { DashboardProps, DailyLog } from '../types';
-import { seedDemoUsers } from '../utils/seedDemoData';
+import { seedDemoUsers, clearTargetedDemoUserData } from '../utils/seedDemoData';
 import { TRANSLATIONS } from '../translations';
 import Toast from '../components/ui/Toast';
 import { useToast } from '../utils/useToast';
@@ -295,7 +295,6 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
     if (!accepted) return;
 
     setPopulating(true);
-    const { clearTargetedDemoUserData } = await import('../utils/seedDemoData');
     const result = await clearTargetedDemoUserData(user.uid);
     setPopulating(false);
     if (result.success) {
