@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, AlertCircle, Loader2, User as UserIcon, Mail, Lock, ArrowRight, Sparkles, LogIn, AtSign, VenetianMask, Send } from 'lucide-react';
+import { X, AlertCircle, Loader2, User as UserIcon, Mail, Lock, ArrowRight, Sparkles, LogIn, AtSign, VenetianMask, LifeBuoy, Send } from 'lucide-react';
 import {
   signInWithEmailAndPassword,
   linkWithCredential,
@@ -369,8 +369,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               <button
                 type="button"
                 onClick={() => setShowRecoveryBox((prev) => !prev)}
-                className="text-xs text-indigo-600 hover:text-indigo-700 underline underline-offset-2 font-semibold"
+                className="text-xs text-indigo-600 hover:text-indigo-700 underline underline-offset-2 font-semibold inline-flex items-center gap-1"
               >
+                <LifeBuoy size={12} />
                 Olvidé mi contraseña
               </button>
 

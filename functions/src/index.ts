@@ -17,11 +17,15 @@ const mailFrom = defineSecret('MAIL_FROM');
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 interface RecoverPasswordInput {
+  username?: string;
   recoveryEmail?: string;
   continueUrl?: string;
 }
 
+const USERNAME_REGEX = /^[a-zA-Z0-9._-]{3,30}$/;
+const USERNAME_DOMAIN = 'user.local';
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
+const normalizeUsername = (value: string) => value.trim().toLowerCase();
 
 const buildResetEmailHtml = (username: string, resetLink: string) => `
   <div style="font-family:Arial,sans-serif;line-height:1.5;color:#111827;max-width:560px;margin:auto;">
@@ -40,13 +44,16 @@ export const requestPasswordRecovery = onCall(
     secrets: [mailHost, mailPort, mailSecure, mailUser, mailPass, mailFrom],
   },
   async (request) => {
-    const { recoveryEmail, continueUrl } = (request.data ?? {}) as RecoverPasswordInput;
+    const { username, recoveryEmail, continueUrl } = (request.data ?? {}) as RecoverPasswordInput;
 
     if (!recoveryEmail || !EMAIL_REGEX.test(recoveryEmail)) {
       throw new HttpsError('invalid-argument', 'El email de recuperación no es válido.');
     }
 
     const normalizedRecoveryEmail = normalizeEmail(recoveryEmail);
+    const normalizedUsername = username && USERNAME_REGEX.test(username)
+      ? normalizeUsername(username)
+      : null;
     const usersSnap = await getFirestore()
       .collection('users')
       .where('recoveryEmail', '==', normalizedRecoveryEmail)
@@ -54,6 +61,15 @@ export const requestPasswordRecovery = onCall(
       .get();
 
     let accountEmail: string | null = null;
+
+    if (normalizedUsername) {
+      try {
+        const userByUsername = await getAuth().getUserByEmail(`${normalizedUsername}@${USERNAME_DOMAIN}`);
+        accountEmail = userByUsername.email ?? null;
+      } catch {
+        accountEmail = null;
+      }
+    }
 
     if (!usersSnap.empty) {
       const uid = usersSnap.docs[0].id;

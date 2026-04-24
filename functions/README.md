@@ -1,14 +1,15 @@
 # Firebase Cloud Functions
 
-Esta carpeta agrega la función callable `requestPasswordRecovery` para recuperar contraseñas usando únicamente email.
+Esta carpeta agrega la función callable `requestPasswordRecovery` para recuperar contraseñas usando email (y opcionalmente username como fallback de compatibilidad).
 
 ## Qué hace
 
-1. Recibe `recoveryEmail`.
-2. Busca coincidencia en `users/{uid}.recoveryEmail` para cuentas de usuario anónimo.
-3. Si no hay coincidencia, intenta recuperar cuenta por el mismo email en Firebase Auth.
-4. Genera un link de restablecimiento de Firebase Auth.
-5. Envía ese link al email recibido usando SMTP.
+1. Recibe `recoveryEmail` (y opcionalmente `username`).
+2. Si llega `username`, intenta resolver `username@user.local` en Firebase Auth.
+3. Busca coincidencia en `users/{uid}.recoveryEmail` para cuentas de usuario anónimo.
+4. Si no hay coincidencia, intenta recuperar cuenta por el mismo email en Firebase Auth.
+5. Genera un link de restablecimiento de Firebase Auth.
+6. Envía ese link al email recibido usando SMTP.
 
 ## Configuración de secretos
 
@@ -45,6 +46,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const fn = httpsCallable(getFunctions(undefined, 'us-central1'), 'requestPasswordRecovery');
 await fn({
-  recoveryEmail: 'mi@email.com'
+  recoveryEmail: 'mi@email.com',
+  username: 'mi_usuario' // opcional
 });
 ```
