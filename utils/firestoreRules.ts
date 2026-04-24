@@ -4,6 +4,7 @@ export const DEMO_UIDS = [
   'PerfectStreak2025',
   'InconsistentStreak2025',
   'DemoMetricas1111111111',
+  'DemoMetricas2222222222',
 ] as const;
 
 const demoUidRuleLines = DEMO_UIDS.map(uid => `         userId == '${uid}' ||`).join('\n');

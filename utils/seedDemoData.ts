@@ -11,6 +11,9 @@ const DEMO_4_UID = 'InconsistentStreak2025';
 // Demo 5: UID termina en 10 dígitos distintos de cero → activa los 10
 // módulos clínicos (parseEnabledModules lo lee como '1111111111').
 const DEMO_5_UID = 'DemoMetricas1111111111';
+// Demo 6: también termina en 10 dígitos distintos de cero para activar
+// los 10 módulos clínicos y mantener paridad con Demo 5.
+const DEMO_6_UID = 'DemoMetricas2222222222';
 
 const DEMO_1_META = {
   uid: DEMO_1_UID,
@@ -315,113 +318,116 @@ export const seedDemoUsers = async (): Promise<{success: boolean, error?: string
       );
     }
 
-    // 6. DEMO 5 — Dashboard base + 10 módulos clínicos completos (últimos 365 días).
-    const demo5Root = await getDoc(doc(db, 'users', DEMO_5_UID));
-    if (!demo5Root.exists()) {
-      await addToBatch(doc(db, 'users', DEMO_5_UID), {
-        uid: DEMO_5_UID,
-        displayName: 'Demo Métricas 1111111111',
-        email: 'demo5@surreal.horizons',
-        createdAt: new Date(Date.now() - 366 * 86400000).toISOString(),
-        photoURL: null,
-        isDemo: true
-      });
-      await addToBatch(doc(db, 'users', DEMO_5_UID, 'Set_goals', 'current'), goalsData);
-    }
+    // 6. DEMO 5 + DEMO 6 — 365 días completos (dashboard base + 10 módulos clínicos).
+    const seedFullClinicalDemo = async (uid: string, displayName: string, email: string): Promise<void> => {
+      const rootSnap = await getDoc(doc(db, 'users', uid));
+      if (!rootSnap.exists()) {
+        await addToBatch(doc(db, 'users', uid), {
+          uid,
+          displayName,
+          email,
+          createdAt: new Date(Date.now() - 366 * 86400000).toISOString(),
+          photoURL: null,
+          isDemo: true
+        });
+        await addToBatch(doc(db, 'users', uid, 'Set_goals', 'current'), goalsData);
+      }
 
-    const today5 = new Date();
-    today5.setHours(12, 0, 0, 0);
-    const today5Key = today5.toISOString().split('T')[0];
-    const [demo5DailyToday, demo5ClinicalToday] = await Promise.all([
-      getDoc(doc(db, 'users', DEMO_5_UID, 'daily_logs', today5Key)),
-      getDoc(doc(db, 'users', DEMO_5_UID, 'deepClinicalLogsAnxiety', today5Key)),
-    ]);
+      const todayX = new Date();
+      todayX.setHours(12, 0, 0, 0);
+      const todayKey = todayX.toISOString().split('T')[0];
+      const [dailyToday, clinicalToday] = await Promise.all([
+        getDoc(doc(db, 'users', uid, 'daily_logs', todayKey)),
+        getDoc(doc(db, 'users', uid, 'deepClinicalLogsAnxiety', todayKey)),
+      ]);
 
-    // Si ya existe una muestra de dashboard+clínico para hoy, asumimos que Demo 5
-    // fue sembrado completo previamente y evitamos reescribir 365*11 docs.
-    if (demo5DailyToday.exists() && demo5ClinicalToday.exists()) {
-      await commitAndResetBatch();
-      console.log('Demo 5 ya existe con dashboard + clínico, se saltea regeneración masiva.');
-      return { success: true };
-    }
+      // Si ya existe muestra dashboard+clínica para hoy, asumimos seed completo.
+      if (dailyToday.exists() && clinicalToday.exists()) {
+        console.log(`${displayName} ya existe con dashboard + clínico, se saltea regeneración masiva.`);
+        return;
+      }
 
-    for (let back = 364; back >= 0; back--) {
-      const d = new Date(today5);
-      d.setDate(today5.getDate() - back);
-      const dateStr = d.toISOString().split('T')[0];
-      const recent = 1 - (back / 365); // 0 = hace un año, 1 = hoy
-      const dow = d.getDay(); // 0=Dom
+      for (let back = 364; back >= 0; back--) {
+        const d = new Date(todayX);
+        d.setDate(todayX.getDate() - back);
+        const dateStr = d.toISOString().split('T')[0];
+        const recent = 1 - (back / 365); // 0 = hace un año, 1 = hoy
+        const dow = d.getDay(); // 0=Dom
 
-      // Dashboard base completo (métricas + objetivos) para poder comparar
-      // contra clínicas en el dashboard principal.
-      const log5 = generateRandomLog(dateStr, true);
-      log5.estado_animo = Math.min(10, Math.max(9, log5.estado_animo || 9));
-      log5.nivel_energia = Math.min(10, Math.max(8, log5.nivel_energia || 8));
-      log5.nivel_deporte = Math.min(10, Math.max(8, log5.nivel_deporte || 8));
-      log5.calidad_sueno = Math.min(10, Math.max(8, log5.calidad_sueno || 8));
-      log5.social_confort = Math.min(10, Math.max(8, log5.social_confort || 8));
-      log5.nivel_motivacion = Math.min(10, Math.max(8, log5.nivel_motivacion || 8));
-      log5.nivel_concentracion = Math.min(10, Math.max(8, log5.nivel_concentracion || 8));
-      log5.regulacion_emocional = Math.min(10, Math.max(8, log5.regulacion_emocional || 8));
-      log5.progreso_porcentaje = 100;
-      log5.objetivos_pendientes = [];
-      await addToBatch(doc(db, 'users', DEMO_5_UID, 'daily_logs', dateStr), log5);
+        // Dashboard base completo (métricas + objetivos) para poder comparar
+        // contra clínicas en el dashboard principal.
+        const log5 = generateRandomLog(dateStr, true);
+        log5.estado_animo = Math.min(10, Math.max(9, log5.estado_animo || 9));
+        log5.nivel_energia = Math.min(10, Math.max(8, log5.nivel_energia || 8));
+        log5.nivel_deporte = Math.min(10, Math.max(8, log5.nivel_deporte || 8));
+        log5.calidad_sueno = Math.min(10, Math.max(8, log5.calidad_sueno || 8));
+        log5.social_confort = Math.min(10, Math.max(8, log5.social_confort || 8));
+        log5.nivel_motivacion = Math.min(10, Math.max(8, log5.nivel_motivacion || 8));
+        log5.nivel_concentracion = Math.min(10, Math.max(8, log5.nivel_concentracion || 8));
+        log5.regulacion_emocional = Math.min(10, Math.max(8, log5.regulacion_emocional || 8));
+        log5.progreso_porcentaje = 100;
+        log5.objetivos_pendientes = [];
+        await addToBatch(doc(db, 'users', uid, 'daily_logs', dateStr), log5);
 
       // --- Anxiety: arco de mejora (70% → 35%)
-      await addToBatch(
-        doc(db, 'users', DEMO_5_UID, 'deepClinicalLogsAnxiety', dateStr),
-        genAnxietyDay(dateStr, recent, dow)
-      );
+        await addToBatch(
+          doc(db, 'users', uid, 'deepClinicalLogsAnxiety', dateStr),
+          genAnxietyDay(dateStr, recent, dow)
+        );
       // --- Depression: arco de mejora (ánimo bajo → estable)
-      await addToBatch(
-        doc(db, 'users', DEMO_5_UID, 'deepClinicalLogsDepression', dateStr),
-        genDepressionDay(dateStr, recent, dow)
-      );
+        await addToBatch(
+          doc(db, 'users', uid, 'deepClinicalLogsDepression', dateStr),
+          genDepressionDay(dateStr, recent, dow)
+        );
       // --- Bipolar: ciclos con estabilización progresiva
-      await addToBatch(
-        doc(db, 'users', DEMO_5_UID, 'deepClinicalLogsBipolar', dateStr),
-        genBipolarDay(dateStr, back)
-      );
+        await addToBatch(
+          doc(db, 'users', uid, 'deepClinicalLogsBipolar', dateStr),
+          genBipolarDay(dateStr, back)
+        );
       // --- Schizophrenia: estable con adherencia alta
-      await addToBatch(
-        doc(db, 'users', DEMO_5_UID, 'deepClinicalLogsSchizophrenia', dateStr),
-        genSchizoDay(dateStr, recent)
-      );
+        await addToBatch(
+          doc(db, 'users', uid, 'deepClinicalLogsSchizophrenia', dateStr),
+          genSchizoDay(dateStr, recent)
+        );
       // --- OCD: mejora de resistencias vs rituales
-      await addToBatch(
-        doc(db, 'users', DEMO_5_UID, 'deepClinicalLogsOCD', dateStr),
-        genOCDDay(dateStr, recent)
-      );
+        await addToBatch(
+          doc(db, 'users', uid, 'deepClinicalLogsOCD', dateStr),
+          genOCDDay(dateStr, recent)
+        );
       // --- Trauma: recuperación gradual
-      await addToBatch(
-        doc(db, 'users', DEMO_5_UID, 'deepClinicalLogsTrauma', dateStr),
-        genTraumaDay(dateStr, recent)
-      );
+        await addToBatch(
+          doc(db, 'users', uid, 'deepClinicalLogsTrauma', dateStr),
+          genTraumaDay(dateStr, recent)
+        );
       // --- Sleep: consistente con algo de ruido
-      await addToBatch(
-        doc(db, 'users', DEMO_5_UID, 'deepClinicalLogsSleep', dateStr),
-        genSleepDay(dateStr, dow)
-      );
+        await addToBatch(
+          doc(db, 'users', uid, 'deepClinicalLogsSleep', dateStr),
+          genSleepDay(dateStr, dow)
+        );
       // --- Personality: progreso DBT
-      await addToBatch(
-        doc(db, 'users', DEMO_5_UID, 'deepClinicalLogsPersonality', dateStr),
-        genPersonalityDay(dateStr, recent)
-      );
+        await addToBatch(
+          doc(db, 'users', uid, 'deepClinicalLogsPersonality', dateStr),
+          genPersonalityDay(dateStr, recent)
+        );
       // --- ADHD: estable
-      await addToBatch(
-        doc(db, 'users', DEMO_5_UID, 'deepClinicalLogsADHD', dateStr),
-        genADHDDay(dateStr, recent, dow)
-      );
+        await addToBatch(
+          doc(db, 'users', uid, 'deepClinicalLogsADHD', dateStr),
+          genADHDDay(dateStr, recent, dow)
+        );
       // --- Substance: arco de sobriedad
-      await addToBatch(
-        doc(db, 'users', DEMO_5_UID, 'deepClinicalLogsSubstance', dateStr),
-        genSubstanceDay(dateStr, recent)
-      );
-    }
+        await addToBatch(
+          doc(db, 'users', uid, 'deepClinicalLogsSubstance', dateStr),
+          genSubstanceDay(dateStr, recent)
+        );
+      }
+    };
+
+    await seedFullClinicalDemo(DEMO_5_UID, 'Demo Métricas 1111111111', 'demo5@surreal.horizons');
+    await seedFullClinicalDemo(DEMO_6_UID, 'Demo Métricas 2222222222', 'demo6@surreal.horizons');
 
     // Final Commit
     await commitAndResetBatch();
-    console.log("Datos generados exitosamente para Demo 1, 2, 3, 4 y 5.");
+    console.log("Datos generados exitosamente para Demo 1, 2, 3, 4, 5 y 6.");
     return { success: true };
 
   } catch (error: any) {
