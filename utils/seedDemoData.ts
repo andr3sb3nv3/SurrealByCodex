@@ -1,3 +1,5 @@
+import { writeBatch, doc, getDoc } from 'firebase/firestore';
+import type { DocumentReference } from 'firebase/firestore';
 import { writeBatch, doc, getDoc, DocumentReference } from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth } from '../services/firebase';
@@ -564,6 +566,7 @@ export const seedDemoUsers = async (targetUid?: string): Promise<{success: boole
     return { success: false, error: message };
   }
 };
+
 // -------------------------------------------------------------------------
 // Generadores por módulo clínico para Demo 5. Cada uno devuelve un doc para
 // un día específico. `recent` ∈ [0, 1] (0 = hace ~1 año, 1 = hoy) permite
