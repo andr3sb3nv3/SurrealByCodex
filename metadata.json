@@ -1,0 +1,7 @@
+{
+  "name": "Surreal Horizons Tracker (CLAUDE)",
+  "description": "A comprehensive personal development tracker featuring daily logging, goal setting, and analytics dashboard with Firebase integration.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
