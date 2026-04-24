@@ -8,7 +8,7 @@ import { db } from '../../services/firebase';
 import Card from '../ui/Card';
 import {
   BaseSectionProps, KpiCard, SectionLoader, SectionEmpty, HistoryItem, Badge, Chip,
-  buildTooltipStyle, inRange, pickLang,
+  buildTooltipStyle, inRange, pickLang, CLINICAL_COLLECTIONS,
 } from './shared';
 
 type Appetite = 'increased' | 'normal' | 'decreased';
@@ -60,7 +60,7 @@ const DepressionSection: React.FC<BaseSectionProps> = ({ user, rangeDays, langua
     (async () => {
       setLoading(true);
       try {
-        const snap = await getDocs(collection(db, 'users', user.uid, 'deepClinicalLogsDepression'));
+        const snap = await getDocs(collection(db, CLINICAL_COLLECTIONS.users, user.uid, CLINICAL_COLLECTIONS.depression));
         const list: Entry[] = [];
         snap.forEach(d => {
           const data = d.data() as Partial<Entry>;

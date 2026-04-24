@@ -17,6 +17,7 @@ import { auth, functions } from '../services/firebase';
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialIsLogin?: boolean;
 }
 
 // Dominio interno para mapear "usuario" → email sintético en Firebase Auth.
@@ -25,10 +26,15 @@ const ANON_EMAIL_DOMAIN = 'user.local';
 const USERNAME_REGEX = /^[a-zA-Z0-9._-]{3,30}$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const usernameToEmail = (u: string) => `${u.trim().toLowerCase()}@${ANON_EMAIL_DOMAIN}`;
+const getErrorCode = (err: unknown): string | undefined => (
+  typeof err === 'object' && err !== null && 'code' in err
+    ? String((err as { code?: string }).code)
+    : undefined
+);
 
 type AuthMode = 'username' | 'email';
 
-const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
+const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialIsLogin = true }) => {
   const [authMode, setAuthMode] = useState<AuthMode>('username');
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
@@ -44,13 +50,14 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
   useEffect(() => {
     if (isOpen) {
+      setIsLogin(initialIsLogin);
       setError(null);
       setRecoveryMessage(null);
       setLoading(false);
       setPassword('');
       setShowRecoveryBox(false);
     }
-  }, [isOpen]);
+  }, [isOpen, initialIsLogin]);
 
   if (!isOpen) return null;
 
@@ -90,19 +97,20 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         }
       }
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       let msg = "Error de autenticación.";
-      if (err.code === 'auth/email-already-in-use') {
+      const code = getErrorCode(err);
+      if (code === 'auth/email-already-in-use') {
         msg = authMode === 'username'
           ? 'Ese usuario ya está registrado. Probá otro o iniciá sesión.'
           : 'Este correo ya está registrado. Intentá iniciar sesión.';
       }
-      if (err.code === 'auth/credential-already-in-use') msg = "Esta cuenta ya existe.";
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+      if (code === 'auth/credential-already-in-use') msg = "Esta cuenta ya existe.";
+      if (code === 'auth/invalid-credential' || code === 'auth/user-not-found' || code === 'auth/wrong-password') {
         msg = authMode === 'username' ? 'Usuario o contraseña incorrectos.' : 'Credenciales incorrectas.';
       }
-      if (err.code === 'auth/weak-password') msg = "La contraseña es muy débil (mínimo 6 caracteres).";
+      if (code === 'auth/weak-password') msg = "La contraseña es muy débil (mínimo 6 caracteres).";
       setError(msg);
     } finally {
       setLoading(false);
@@ -127,8 +135,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       });
       const data = result.data as { message?: string };
       setRecoveryMessage(data?.message || 'Te enviamos un email para restablecer tu contraseña.');
-    } catch (err: any) {
-      const code = err?.code as string | undefined;
+    } catch (err: unknown) {
+      const code = getErrorCode(err);
       if (code?.includes('not-found') || code?.includes('permission-denied')) {
         setError('No existe una cuenta con esos datos.');
       } else {
@@ -161,8 +169,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         if (auth.currentUser && auth.currentUser.isAnonymous) {
           try {
             await linkWithPopup(auth.currentUser, provider);
-          } catch (linkError: any) {
-            if (linkError.code === 'auth/credential-already-in-use') {
+          } catch (linkError: unknown) {
+            if (getErrorCode(linkError) === 'auth/credential-already-in-use') {
               await signInWithPopup(auth, provider);
             } else {
               throw linkError;
@@ -172,20 +180,21 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           await signInWithPopup(auth, provider);
         }
         onClose();
-      } catch (popupErr: any) {
-        if (isPopupIssue(popupErr.code)) {
+      } catch (popupErr: unknown) {
+        if (isPopupIssue(getErrorCode(popupErr))) {
           await signInWithRedirect(auth, provider);
           return;
         }
         throw popupErr;
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Social Auth Error:", err);
       let msg = "No se pudo iniciar sesión con Google.";
+      const code = getErrorCode(err);
 
-      if (err.code === 'auth/account-exists-with-different-credential') msg = "Ya existe una cuenta con el mismo email pero diferentes credenciales.";
-      if (err.code === 'auth/credential-already-in-use') msg = "Esta cuenta de Google ya está vinculada a otro usuario.";
-      if (err.code === 'auth/unauthorized-domain') msg = "Este dominio no está autorizado en Firebase Auth. Agregalo en Authentication → Settings → Authorized domains.";
+      if (code === 'auth/account-exists-with-different-credential') msg = "Ya existe una cuenta con el mismo email pero diferentes credenciales.";
+      if (code === 'auth/credential-already-in-use') msg = "Esta cuenta de Google ya está vinculada a otro usuario.";
+      if (code === 'auth/unauthorized-domain') msg = "Este dominio no está autorizado en Firebase Auth. Agregalo en Authentication → Settings → Authorized domains.";
 
       setError(msg);
     } finally {
