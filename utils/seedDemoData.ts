@@ -262,28 +262,88 @@ export const seedDemoUsers = async (): Promise<{success: boolean, error?: string
       initial: DEMO_2_META.initial
     });
 
-    // 5. DEMO 5 — Métricas clínicas completas (últimos 365 días, los 10 módulos).
-    // Idempotencia: si el doc raíz ya existe, saltamos la generación para
-    // no volver a escribir 3650 docs cada vez que se toca "Demo".
-    const demo5Root = await getDoc(doc(db, 'users', DEMO_5_UID));
-    if (demo5Root.exists()) {
-      await commitAndResetBatch();
-      console.log('Demo 5 ya existe, se saltea la generación clínica (365 x 10 módulos).');
-      return { success: true };
+    // 5. DEMO 3 — Métricas clínicas completas (últimos 365 días, los 10 módulos).
+    // Esto permite comparar en Dashboard los indicadores base vs clínicos.
+    const today3 = new Date();
+    today3.setHours(12, 0, 0, 0);
+    for (let back = 364; back >= 0; back--) {
+      const d = new Date(today3);
+      d.setDate(today3.getDate() - back);
+      const dateStr = d.toISOString().split('T')[0];
+      const recent = 1 - (back / 365); // 0 = hace un año, 1 = hoy
+      const dow = d.getDay();
+
+      await addToBatch(
+        doc(db, 'users', DEMO_3_UID, 'deepClinicalLogsAnxiety', dateStr),
+        genAnxietyDay(dateStr, recent, dow)
+      );
+      await addToBatch(
+        doc(db, 'users', DEMO_3_UID, 'deepClinicalLogsDepression', dateStr),
+        genDepressionDay(dateStr, recent, dow)
+      );
+      await addToBatch(
+        doc(db, 'users', DEMO_3_UID, 'deepClinicalLogsBipolar', dateStr),
+        genBipolarDay(dateStr, back)
+      );
+      await addToBatch(
+        doc(db, 'users', DEMO_3_UID, 'deepClinicalLogsSchizophrenia', dateStr),
+        genSchizoDay(dateStr, recent)
+      );
+      await addToBatch(
+        doc(db, 'users', DEMO_3_UID, 'deepClinicalLogsOCD', dateStr),
+        genOCDDay(dateStr, recent)
+      );
+      await addToBatch(
+        doc(db, 'users', DEMO_3_UID, 'deepClinicalLogsTrauma', dateStr),
+        genTraumaDay(dateStr, recent)
+      );
+      await addToBatch(
+        doc(db, 'users', DEMO_3_UID, 'deepClinicalLogsSleep', dateStr),
+        genSleepDay(dateStr, dow)
+      );
+      await addToBatch(
+        doc(db, 'users', DEMO_3_UID, 'deepClinicalLogsPersonality', dateStr),
+        genPersonalityDay(dateStr, recent)
+      );
+      await addToBatch(
+        doc(db, 'users', DEMO_3_UID, 'deepClinicalLogsADHD', dateStr),
+        genADHDDay(dateStr, recent, dow)
+      );
+      await addToBatch(
+        doc(db, 'users', DEMO_3_UID, 'deepClinicalLogsSubstance', dateStr),
+        genSubstanceDay(dateStr, recent)
+      );
     }
 
-    await addToBatch(doc(db, 'users', DEMO_5_UID), {
-      uid: DEMO_5_UID,
-      displayName: 'Demo Métricas 1111111111',
-      email: 'demo5@surreal.horizons',
-      createdAt: new Date(Date.now() - 366 * 86400000).toISOString(),
-      photoURL: null,
-      isDemo: true
-    });
-    await addToBatch(doc(db, 'users', DEMO_5_UID, 'Set_goals', 'current'), goalsData);
+    // 6. DEMO 5 — Dashboard base + 10 módulos clínicos completos (últimos 365 días).
+    const demo5Root = await getDoc(doc(db, 'users', DEMO_5_UID));
+    if (!demo5Root.exists()) {
+      await addToBatch(doc(db, 'users', DEMO_5_UID), {
+        uid: DEMO_5_UID,
+        displayName: 'Demo Métricas 1111111111',
+        email: 'demo5@surreal.horizons',
+        createdAt: new Date(Date.now() - 366 * 86400000).toISOString(),
+        photoURL: null,
+        isDemo: true
+      });
+      await addToBatch(doc(db, 'users', DEMO_5_UID, 'Set_goals', 'current'), goalsData);
+    }
 
     const today5 = new Date();
     today5.setHours(12, 0, 0, 0);
+    const today5Key = today5.toISOString().split('T')[0];
+    const [demo5DailyToday, demo5ClinicalToday] = await Promise.all([
+      getDoc(doc(db, 'users', DEMO_5_UID, 'daily_logs', today5Key)),
+      getDoc(doc(db, 'users', DEMO_5_UID, 'deepClinicalLogsAnxiety', today5Key)),
+    ]);
+
+    // Si ya existe una muestra de dashboard+clínico para hoy, asumimos que Demo 5
+    // fue sembrado completo previamente y evitamos reescribir 365*11 docs.
+    if (demo5DailyToday.exists() && demo5ClinicalToday.exists()) {
+      await commitAndResetBatch();
+      console.log('Demo 5 ya existe con dashboard + clínico, se saltea regeneración masiva.');
+      return { success: true };
+    }
 
     for (let back = 364; back >= 0; back--) {
       const d = new Date(today5);
@@ -291,6 +351,21 @@ export const seedDemoUsers = async (): Promise<{success: boolean, error?: string
       const dateStr = d.toISOString().split('T')[0];
       const recent = 1 - (back / 365); // 0 = hace un año, 1 = hoy
       const dow = d.getDay(); // 0=Dom
+
+      // Dashboard base completo (métricas + objetivos) para poder comparar
+      // contra clínicas en el dashboard principal.
+      const log5 = generateRandomLog(dateStr, true);
+      log5.estado_animo = Math.min(10, Math.max(9, log5.estado_animo || 9));
+      log5.nivel_energia = Math.min(10, Math.max(8, log5.nivel_energia || 8));
+      log5.nivel_deporte = Math.min(10, Math.max(8, log5.nivel_deporte || 8));
+      log5.calidad_sueno = Math.min(10, Math.max(8, log5.calidad_sueno || 8));
+      log5.social_confort = Math.min(10, Math.max(8, log5.social_confort || 8));
+      log5.nivel_motivacion = Math.min(10, Math.max(8, log5.nivel_motivacion || 8));
+      log5.nivel_concentracion = Math.min(10, Math.max(8, log5.nivel_concentracion || 8));
+      log5.regulacion_emocional = Math.min(10, Math.max(8, log5.regulacion_emocional || 8));
+      log5.progreso_porcentaje = 100;
+      log5.objetivos_pendientes = [];
+      await addToBatch(doc(db, 'users', DEMO_5_UID, 'daily_logs', dateStr), log5);
 
       // --- Anxiety: arco de mejora (70% → 35%)
       await addToBatch(
