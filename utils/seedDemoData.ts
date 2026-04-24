@@ -1,5 +1,6 @@
 import { writeBatch, doc, getDoc } from 'firebase/firestore';
 import type { DocumentReference } from 'firebase/firestore';
+import { writeBatch, doc, getDoc, DocumentReference } from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth } from '../services/firebase';
 import { DailyLog } from '../types';
@@ -138,7 +139,7 @@ export const seedDemoUsers = async (targetUid?: string): Promise<{success: boole
   }
 
   // Nuevo flujo focalizado por demo (botón "Generar demo" sobre el usuario actual).
-  if (targetUid && TARGETED_DEMO_UIDS.includes(targetUid as typeof TARGETED_DEMO_UIDS[number])) {
+  if (targetUid && [DEMO_4_UID, DEMO_5_UID, DEMO_6_UID].includes(targetUid)) {
     try {
       const goalsData = {
         updatedAt: Date.now(),
@@ -214,7 +215,7 @@ export const seedDemoUsers = async (targetUid?: string): Promise<{success: boole
         const log = generateRandomLog(dateStr, targetUid !== DEMO_5_UID);
         const goalsProgress = buildThreeGoals();
         log.reflexion = maybeReflection();
-        delete (log as DailyLog & { audio_note?: string }).audio_note;
+        log.audio_note = undefined;
         log.objetivos_completados = goalsProgress.objetivos_completados;
         log.objetivos_pendientes = goalsProgress.objetivos_pendientes;
         log.progreso_porcentaje = Math.round((goalsProgress.completed / 3) * 100);
