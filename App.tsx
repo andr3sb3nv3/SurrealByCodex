@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { onAuthStateChanged, User, signOut, getRedirectResult } from 'firebase/auth';
+import { onAuthStateChanged, User, signOut, getRedirectResult, IdTokenResult } from 'firebase/auth';
 import { setDoc, doc, collection, query, where, deleteDoc, onSnapshot, getDoc } from 'firebase/firestore';
 import { Loader2, AlertCircle, Copy, Check, Users, ChevronUp, ChevronDown, LogIn, LogOut } from 'lucide-react';
 import { auth, db } from './services/firebase';
@@ -8,6 +8,7 @@ import PersonalCanvas from './views/PersonalCanvas';
 import PersonalDevDashboard from './views/PersonalDevDashboard';
 import MonthlyReflections from './views/MonthlyReflections';
 import UserProfile from './views/UserProfile';
+import LandingPage from './views/LandingPage';
 import UserOnboarding from './components/UserOnboarding';
 import ProfileCompletion from './components/ProfileCompletion';
 import YearInPixels from './views/YearInPixels';
@@ -42,7 +43,15 @@ const createDemoUser = ({ uid, displayName, email, creationTime }: DemoUserSeed)
   tenantId: null,
   delete: async () => {},
   getIdToken: async () => '',
-  getIdTokenResult: async () => ({} as any),
+  getIdTokenResult: async () => ({
+    claims: {},
+    token: '',
+    authTime: '',
+    issuedAtTime: '',
+    expirationTime: '',
+    signInProvider: null,
+    signInSecondFactor: null,
+  } as IdTokenResult),
   reload: async () => {},
   toJSON: () => ({}),
 } as unknown as User);
@@ -54,24 +63,10 @@ const DEMO_USER = createDemoUser({
   creationTime: new Date(2024, 9, 15).toISOString(),
 });
 
-const DEMO_USER_2 = createDemoUser({
-  uid: 'K9xL2vPq5mZ8jR3wT7nB4cE1aD6s',
-  displayName: 'Usuario Demo 2',
-  email: 'demo2@surreal.horizons',
-  creationTime: new Date(2025, 0, 10).toISOString(),
-});
-
-const DEMO_USER_3 = createDemoUser({
-  uid: 'PerfectStreak2025',
-  displayName: 'Usuario Demo 3',
-  email: 'demo3@surreal.horizons',
-  creationTime: new Date(2024, 11, 31).toISOString(),
-});
-
 const DEMO_USER_4 = createDemoUser({
   uid: 'InconsistentStreak2025',
-  displayName: 'Andrés Benve',
-  email: 'andres@surreal.horizons',
+  displayName: 'Demo Clínico 0110000000',
+  email: 'demo4@surreal.horizons',
   creationTime: new Date(2024, 11, 31).toISOString(),
 });
 
@@ -79,20 +74,28 @@ const DEMO_USER_4 = createDemoUser({
 // módulos clínicos (parseEnabledModules lee esa porción del displayName/uid).
 const DEMO_USER_5 = createDemoUser({
   uid: 'DemoMetricas1111111111',
-  displayName: 'Demo Métricas 1111111111',
+  displayName: 'Demo Clínico 0001000001',
   email: 'demo5@surreal.horizons',
   creationTime: new Date(Date.now() - 366 * 86400000).toISOString(),
 });
 
+const DEMO_USER_6 = createDemoUser({
+  uid: 'DemoMetricas2222222222',
+  displayName: 'Demo Clínico 1111111111',
+  email: 'demo6@surreal.horizons',
+  creationTime: new Date(Date.now() - 366 * 86400000).toISOString(),
+});
+
 export default function App() {
-  const [view, setView] = useState<'canvas' | 'dashboard' | 'comments' | 'profile' | 'yearPixels' | 'clinical'>('canvas');
+  const [view, setView] = useState<'landing' | 'canvas' | 'dashboard' | 'comments' | 'profile' | 'yearPixels' | 'clinical'>('canvas');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [currentRealUser, setCurrentRealUser] = useState<User | null>(null);
   const [isOnboarding, setIsOnboarding] = useState(false);
   const [needsProfile, setNeedsProfile] = useState(false);
   
-  // State for the Demo Mode: 0 = Off, 1 = Demo 1, 2 = Demo 2, 3 = Demo 3, 4 = Demo 4
+  // State for the Demo Mode: 0 = Off, 1 = Demo 1, 4 = Demo 4, 5 = Demo 5, 6 = Demo 6
   const [demoMode, setDemoMode] = useState<number>(4);
 
   // State for Pro Membership (Default to true as requested)
@@ -130,6 +133,11 @@ export default function App() {
     localStorage.setItem('app_theme', newTheme);
   };
 
+  const openLoginModal = () => {
+    setAuthModalMode('login');
+    setIsAuthModalOpen(true);
+  };
+
   // Apply Theme Effect
   useEffect(() => {
     const applyTheme = () => {
@@ -163,8 +171,8 @@ export default function App() {
       // Demo 1 is ALWAYS treated as a new user starting the app
       setIsOnboarding(true);
       setNeedsProfile(false);
-    } else if (demoMode === 2 || demoMode === 3 || demoMode === 4 || demoMode === 5) {
-      // Demos 2..5 skip onboarding (Historical data views)
+    } else if (demoMode === 4 || demoMode === 5 || demoMode === 6) {
+      // Demos 4..6 skip onboarding (Historical data views)
       setIsOnboarding(false);
       setNeedsProfile(false);
     } else if (currentRealUser) {
@@ -247,6 +255,7 @@ export default function App() {
             // If we are not in demo mode and a real user logs in, close modal
             if (u && demoMode === 0) {
               setIsAuthModalOpen(false);
+              setView(prev => prev === 'landing' ? 'canvas' : prev);
             }
         });
         return () => unsubscribe();
@@ -322,7 +331,7 @@ export default function App() {
         url.searchParams.delete('p');
         window.history.replaceState({}, '', url.pathname + url.search + url.hash);
       }
-      setIsAuthModalOpen(true);
+      openLoginModal();
       return;
     }
 
@@ -361,10 +370,9 @@ export default function App() {
     if (sharedUserViewing) return sharedUserViewing;
     switch (demoMode) {
       case 1: return DEMO_USER;
-      case 2: return DEMO_USER_2;
-      case 3: return DEMO_USER_3;
       case 4: return DEMO_USER_4;
       case 5: return DEMO_USER_5;
+      case 6: return DEMO_USER_6;
       default: return currentRealUser;
     }
   }, [sharedUserViewing, demoMode, currentRealUser]);
@@ -393,9 +401,9 @@ export default function App() {
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      setView('canvas');
+      setView('landing');
       setSharedUserViewing(null);
-      setDemoMode(4);
+      setDemoMode(0);
     } catch (error) {
       console.error("Error signing out", error);
       showToast("Error al cerrar sesión", 'error');
@@ -462,6 +470,7 @@ export default function App() {
     <>
       <AuthModal
         isOpen={isAuthModalOpen}
+        initialIsLogin={authModalMode === 'login'}
         onClose={() => setIsAuthModalOpen(false)}
       />
       
@@ -509,10 +518,9 @@ export default function App() {
               <div className="flex flex-col gap-1">
                 {[
                   { mode: 1, label: 'Demo 1 · Onboarding', hint: 'Flujo de nuevo usuario' },
-                  { mode: 2, label: 'Demo 2 · Histórico', hint: 'Usuario sin racha' },
-                  { mode: 3, label: 'Demo 3 · Racha perfecta', hint: 'Registros diarios' },
-                  { mode: 4, label: 'Demo 4 · Inconsistente', hint: 'Racha irregular' },
-                  { mode: 5, label: 'Demo 5 · Métricas clínicas', hint: '365 días · 10 módulos' },
+                  { mode: 4, label: 'Demo 4 · Depresión + Bipolar', hint: 'Últimos 3 meses' },
+                  { mode: 5, label: 'Demo 5 · Psicótico + Consumo', hint: '365 días imperfectos' },
+                  { mode: 6, label: 'Demo 6 · Completo', hint: '365 días · todos los trastornos' },
                 ].map(({ mode, label, hint }) => {
                   const active = demoMode === mode;
                   return (
@@ -560,7 +568,7 @@ export default function App() {
                   </button>
                 ) : (
                   <button
-                    onClick={() => setIsAuthModalOpen(true)}
+                    onClick={openLoginModal}
                     className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
                   >
                     <LogIn size={16} />
@@ -582,6 +590,18 @@ export default function App() {
         </div>
       )}
 
+      {view === 'landing' && (
+        <LandingPage
+          onLogin={() => {
+            openLoginModal();
+          }}
+          onRegister={() => {
+            setAuthModalMode('register');
+            setIsAuthModalOpen(true);
+          }}
+        />
+      )}
+
       {view === 'canvas' && (
         <PersonalCanvas
            onNavigateToDashboard={() => setView('dashboard')}
@@ -590,7 +610,7 @@ export default function App() {
            onDateChange={setSelectedDate}
            user={activeUser}
            authUser={currentRealUser}
-           onAuthRequest={() => setIsAuthModalOpen(true)}
+           onAuthRequest={openLoginModal}
            onNavigateToProfile={() => setView('profile')}
            language={language}
            onToggleLanguage={handleToggleLanguage}
@@ -604,12 +624,13 @@ export default function App() {
       )}
       {view === 'dashboard' && (
         <PersonalDevDashboard
+           key={`dashboard-${activeUser?.uid ?? 'none'}`}
            onBack={() => sharedUserViewing ? handleExitSharedView() : setView('canvas')}
            user={activeUser}
            authUser={currentRealUser}
            onNavigateToComments={() => setView('comments')}
            onNavigateToClinicalMetrics={() => setView('clinical')}
-           onAuthRequest={() => setIsAuthModalOpen(true)}
+           onAuthRequest={openLoginModal}
            onNavigateToProfile={() => setView('profile')}
            language={language}
            onToggleLanguage={handleToggleLanguage}
@@ -625,10 +646,11 @@ export default function App() {
       )}
       {view === 'clinical' && (
         <ClinicalDashboard
+           key={`clinical-${activeUser?.uid ?? 'none'}`}
            onBack={() => setView('dashboard')}
            user={activeUser}
            authUser={currentRealUser}
-           onAuthRequest={() => setIsAuthModalOpen(true)}
+           onAuthRequest={openLoginModal}
            onNavigateToProfile={() => setView('profile')}
            language={language}
            onToggleLanguage={handleToggleLanguage}
@@ -647,7 +669,7 @@ export default function App() {
            onBack={() => setView('canvas')}
            user={activeUser}
            authUser={currentRealUser}
-           onAuthRequest={() => setIsAuthModalOpen(true)}
+           onAuthRequest={openLoginModal}
            onNavigateToProfile={() => setView('profile')}
            language={language}
            onToggleLanguage={handleToggleLanguage}
@@ -663,10 +685,11 @@ export default function App() {
       )}
       {view === 'profile' && activeUser && (
         <UserProfile
+           key={`profile-${activeUser.uid}`}
            onBack={() => setView('canvas')}
            user={activeUser}
            authUser={currentRealUser}
-           onAuthRequest={() => setIsAuthModalOpen(true)}
+           onAuthRequest={openLoginModal}
            onNavigateToProfile={() => {}} 
            language={language}
            onToggleLanguage={handleToggleLanguage}
@@ -685,7 +708,7 @@ export default function App() {
            onBack={() => setView('profile')}
            user={activeUser}
            authUser={currentRealUser}
-           onAuthRequest={() => setIsAuthModalOpen(true)}
+           onAuthRequest={openLoginModal}
            onNavigateToProfile={() => setView('profile')} 
            language={language}
            onToggleLanguage={handleToggleLanguage}

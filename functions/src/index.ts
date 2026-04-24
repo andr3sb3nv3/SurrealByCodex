@@ -17,20 +17,16 @@ const mailFrom = defineSecret('MAIL_FROM');
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 interface RecoverPasswordInput {
-  username?: string;
   recoveryEmail?: string;
   continueUrl?: string;
 }
 
-const USERNAME_REGEX = /^[a-zA-Z0-9._-]{3,30}$/;
-const USERNAME_DOMAIN = 'user.local';
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
-const normalizeUsername = (value: string) => value.trim().toLowerCase();
 
-const buildResetEmailHtml = (username: string, resetLink: string) => `
+const buildResetEmailHtml = (accountEmail: string, resetLink: string) => `
   <div style="font-family:Arial,sans-serif;line-height:1.5;color:#111827;max-width:560px;margin:auto;">
     <h2 style="margin:0 0 8px;">Recuperar contraseña</h2>
-    <p style="margin:0 0 16px;">Recibimos una solicitud para restablecer la contraseña del usuario <b>${username}</b>.</p>
+    <p style="margin:0 0 16px;">Recibimos una solicitud para restablecer la contraseña de la cuenta <b>${accountEmail}</b>.</p>
     <p style="margin:0 0 20px;">
       <a href="${resetLink}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:12px 16px;border-radius:8px;font-weight:600;">Restablecer contraseña</a>
     </p>
@@ -44,16 +40,13 @@ export const requestPasswordRecovery = onCall(
     secrets: [mailHost, mailPort, mailSecure, mailUser, mailPass, mailFrom],
   },
   async (request) => {
-    const { username, recoveryEmail, continueUrl } = (request.data ?? {}) as RecoverPasswordInput;
+    const { recoveryEmail, continueUrl } = (request.data ?? {}) as RecoverPasswordInput;
 
     if (!recoveryEmail || !EMAIL_REGEX.test(recoveryEmail)) {
       throw new HttpsError('invalid-argument', 'El email de recuperación no es válido.');
     }
 
     const normalizedRecoveryEmail = normalizeEmail(recoveryEmail);
-    const normalizedUsername = username && USERNAME_REGEX.test(username)
-      ? normalizeUsername(username)
-      : null;
     const usersSnap = await getFirestore()
       .collection('users')
       .where('recoveryEmail', '==', normalizedRecoveryEmail)
@@ -61,15 +54,6 @@ export const requestPasswordRecovery = onCall(
       .get();
 
     let accountEmail: string | null = null;
-
-    if (normalizedUsername) {
-      try {
-        const userByUsername = await getAuth().getUserByEmail(`${normalizedUsername}@${USERNAME_DOMAIN}`);
-        accountEmail = userByUsername.email ?? null;
-      } catch {
-        accountEmail = null;
-      }
-    }
 
     if (!usersSnap.empty) {
       const uid = usersSnap.docs[0].id;
@@ -110,7 +94,7 @@ export const requestPasswordRecovery = onCall(
       from: mailFrom.value(),
       to: normalizedRecoveryEmail,
       subject: 'Recuperación de contraseña - Surreal Horizons',
-      html: buildResetEmailHtml(normalizedRecoveryEmail, resetLink),
+      html: buildResetEmailHtml(accountEmail, resetLink),
     });
 
     return {
