@@ -269,6 +269,7 @@ export default function App() {
             // If we are not in demo mode and a real user logs in, close modal
             if (u && demoMode === 0) {
               setIsAuthModalOpen(false);
+              setView(prev => prev === 'landing' ? 'canvas' : prev);
             }
         });
         return () => unsubscribe();
