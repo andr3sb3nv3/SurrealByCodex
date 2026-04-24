@@ -48,7 +48,6 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
   const [permissionError, setPermissionError] = useState(false);
   const [showDemoModal, setShowDemoModal] = useState(false);
-  const [configuredClinicalMetrics, setConfiguredClinicalMetrics] = useState<ClinicalMetricKey[]>([]);
   const [demoConfig, setDemoConfig] = useState<DemoSeedConfig & { targetUid: string }>({
     targetUid: user?.uid ?? 'InconsistentStreak2025',
     months: 6,
@@ -335,11 +334,6 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
     }
   }, [user]);
 
-  useEffect(() => {
-    if (configuredClinicalMetrics.length === 0) return;
-    setDemoConfig((prev) => ({ ...prev, includeClinicalMetrics: configuredClinicalMetrics }));
-  }, [configuredClinicalMetrics]);
-
   const populateDemoData = async () => {
     if (readOnly) return;
     if (!user || !db) return;
@@ -349,11 +343,17 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
       return;
     }
     setPopulating(true);
+    const clearResult = await clearTargetedDemoUserData(targetUid);
+    if (!clearResult.success && clearResult.error !== 'invalid-demo-target') {
+      setPopulating(false);
+      showToast(`Error al borrar demo previo: ${clearResult.error}`, 'error');
+      return;
+    }
     const { targetUid: _ignored, ...seedConfig } = demoConfig;
     const result = await seedDemoUsers(targetUid, seedConfig);
     setPopulating(false);
     if (result.success) {
-        showToast(`Demo generado con éxito (${targetUid}).`, 'success');
+        showToast(`Demo regenerado con éxito (${targetUid}).`, 'success');
         setShowDemoModal(false);
         fetchHistory();
     } else {
@@ -537,7 +537,7 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
         <div className="fixed inset-0 bg-black/50 z-[110] flex items-center justify-center p-4">
           <div className="w-full max-w-3xl bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-5 max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Generar datos demo</h3>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Regenerar datos demo</h3>
               <button onClick={() => setShowDemoModal(false)} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800"><X size={18} /></button>
             </div>
             <div className="grid md:grid-cols-2 gap-4 text-sm">
@@ -606,7 +606,7 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
             <div className="mt-6 flex justify-end gap-3">
               <button onClick={() => setShowDemoModal(false)} className="px-4 py-2 rounded border border-slate-300 dark:border-slate-600">Cancelar</button>
               <button onClick={populateDemoData} disabled={populating} className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-60">
-                {populating ? 'Generando...' : 'Generar'}
+                {populating ? 'Regenerando...' : 'Eliminar y regenerar'}
               </button>
             </div>
           </div>
