@@ -20,6 +20,20 @@ export interface BaseSectionProps {
   chartColors: ChartColors;
 }
 
+export const CLINICAL_COLLECTIONS = {
+  users: 'users',
+  anxiety: 'deepClinicalLogsAnxiety',
+  depression: 'deepClinicalLogsDepression',
+  bipolar: 'deepClinicalLogsBipolar',
+  schizophrenia: 'deepClinicalLogsSchizophrenia',
+  ocd: 'deepClinicalLogsOCD',
+  trauma: 'deepClinicalLogsTrauma',
+  sleep: 'deepClinicalLogsSleep',
+  personality: 'deepClinicalLogsPersonality',
+  adhd: 'deepClinicalLogsADHD',
+  substance: 'deepClinicalLogsSubstance',
+} as const;
+
 export const pickLang = (language: Language): 'es' | 'en' => (language === 'es' ? 'es' : 'en');
 
 export const friendlyDate = (dateKey: string, language: Language): string =>

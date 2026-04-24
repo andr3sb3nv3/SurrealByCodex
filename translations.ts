@@ -1,6 +1,6 @@
 import { Language } from './types';
 
-export const TRANSLATIONS: Record<Language, any> = {
+const TRANSLATIONS_RAW = {
   es: {
     // ... existing translations ...
     // General
@@ -515,3 +515,6 @@ export const TRANSLATIONS: Record<Language, any> = {
     // ... rest ...
   }
 };
+
+export type TranslationSchema = typeof TRANSLATIONS_RAW.es;
+export const TRANSLATIONS: Record<Language, TranslationSchema> = TRANSLATIONS_RAW as Record<Language, TranslationSchema>;
