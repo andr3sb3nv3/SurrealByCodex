@@ -32,10 +32,35 @@ const DEFAULT_DAILY_METRICS: DailyMetricKey[] = [
   'nivel_concentracion',
   'regulacion_emocional',
 ];
+const DEFAULT_CLINICAL_METRICS: ClinicalMetricKey[] = [
+  'depression',
+  'bipolar',
+  'schizophrenia',
+  'substance',
+  'anxiety',
+  'ocd',
+  'trauma',
+  'sleep',
+  'personality',
+  'adhd',
+];
+
 type DailyMetricKey = keyof Pick<DailyLog,
   'estado_animo' | 'nivel_energia' | 'nivel_deporte' | 'calidad_sueno' |
   'social_confort' | 'nivel_motivacion' | 'nivel_concentracion' | 'regulacion_emocional'
 >;
+
+type ClinicalMetricKey =
+  | 'anxiety'
+  | 'depression'
+  | 'bipolar'
+  | 'schizophrenia'
+  | 'ocd'
+  | 'trauma'
+  | 'sleep'
+  | 'personality'
+  | 'adhd'
+  | 'substance';
 
 export interface DemoSeedConfig {
   months?: number;
@@ -222,18 +247,18 @@ export const seedDemoUsers = async (
         if (opCount >= 450) await commitAndResetBatch();
       };
 
-      const cfgMonths = Math.max(1, Math.min(24, Math.round(config.months ?? 6)));
+      const cfgMonths = Math.max(1, Math.min(24, Math.round(config.months ?? (targetUid === DEMO_4_UID ? 3 : 12))));
       const goalsCount = Math.max(1, Math.min(10, Math.round(config.dailyGoalsCount ?? 3)));
       const selectedDailyMetrics = new Set<DailyMetricKey>((config.includeDailyMetrics?.length ? config.includeDailyMetrics : DEFAULT_DAILY_METRICS));
       const selectedClinicalMetrics = new Set<ClinicalMetricKey>((config.includeClinicalMetrics?.length ? config.includeClinicalMetrics : DEFAULT_CLINICAL_METRICS));
-      const consistentAlways = (config.consistency ?? 'inconsistent') === 'always';
+      const consistentAlways = (config.consistency ?? (targetUid === DEMO_5_UID ? 'inconsistent' : 'always')) === 'always';
       const evolvingMetrics = Boolean(config.evolvingMetrics);
 
       const buildGoals = () => {
         const completed = rnd(0, goalsCount);
         const all = Array.from({ length: goalsCount }, (_, i) => ({
           tarea: `Objetivo ${i + 1}`,
-          categoria: 'General',
+          categoria: CATEGORIES[i % CATEGORIES.length],
         }));
         return {
           completed,
@@ -275,7 +300,7 @@ export const seedDemoUsers = async (
 
         if (chance(omitProbability)) continue;
 
-        const log = generateRandomLog(dateStr, consistentAlways);
+        const log = generateRandomLog(dateStr, targetUid !== DEMO_5_UID);
         const goalsProgress = buildGoals();
         log.reflexion = maybeReflection();
         log.objetivos_completados = goalsProgress.objetivos_completados;
@@ -298,24 +323,37 @@ export const seedDemoUsers = async (
 
         await addToBatch(doc(db, 'users', targetUid, 'daily_logs', dateStr), log);
 
-        const clinicalFactories: Record<ClinicalMetricKey, { collection: string; data: object }> = {
-          anxiety: { collection: 'deepClinicalLogsAnxiety', data: genAnxietyDay(dateStr, recent, dow) },
-          depression: { collection: 'deepClinicalLogsDepression', data: genDepressionDay(dateStr, recent, dow) },
-          bipolar: { collection: 'deepClinicalLogsBipolar', data: genBipolarDay(dateStr, back) },
-          schizophrenia: { collection: 'deepClinicalLogsSchizophrenia', data: genSchizoDay(dateStr, recent) },
-          ocd: { collection: 'deepClinicalLogsOCD', data: genOCDDay(dateStr, recent) },
-          trauma: { collection: 'deepClinicalLogsTrauma', data: genTraumaDay(dateStr, recent) },
-          sleep: { collection: 'deepClinicalLogsSleep', data: genSleepDay(dateStr, dow) },
-          personality: { collection: 'deepClinicalLogsPersonality', data: genPersonalityDay(dateStr, recent) },
-          adhd: { collection: 'deepClinicalLogsADHD', data: genADHDDay(dateStr, recent, dow) },
-          substance: { collection: 'deepClinicalLogsSubstance', data: genSubstanceDay(dateStr, recent) },
-        };
-        for (const metric of selectedClinicalMetrics) {
-          const clinical = clinicalFactories[metric];
-          await addToBatch(
-            doc(db, 'users', targetUid, clinical.collection, dateStr),
-            clinical.data
-          );
+        if ((targetUid === DEMO_4_UID || targetUid === DEMO_6_UID) && selectedClinicalMetrics.has('depression')) {
+          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsDepression', dateStr), genDepressionDay(dateStr, recent, dow));
+        }
+        if ((targetUid === DEMO_4_UID || targetUid === DEMO_6_UID) && selectedClinicalMetrics.has('bipolar')) {
+          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsBipolar', dateStr), genBipolarDay(dateStr, back));
+        }
+
+        if ((targetUid === DEMO_5_UID || targetUid === DEMO_6_UID) && selectedClinicalMetrics.has('schizophrenia')) {
+          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsSchizophrenia', dateStr), genSchizoDay(dateStr, recent));
+        }
+        if ((targetUid === DEMO_5_UID || targetUid === DEMO_6_UID) && selectedClinicalMetrics.has('substance')) {
+          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsSubstance', dateStr), genSubstanceDay(dateStr, recent));
+        }
+
+        if (targetUid === DEMO_6_UID && selectedClinicalMetrics.has('anxiety')) {
+          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsAnxiety', dateStr), genAnxietyDay(dateStr, recent, dow));
+        }
+        if (targetUid === DEMO_6_UID && selectedClinicalMetrics.has('ocd')) {
+          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsOCD', dateStr), genOCDDay(dateStr, recent));
+        }
+        if (targetUid === DEMO_6_UID && selectedClinicalMetrics.has('trauma')) {
+          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsTrauma', dateStr), genTraumaDay(dateStr, recent));
+        }
+        if (targetUid === DEMO_6_UID && selectedClinicalMetrics.has('sleep')) {
+          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsSleep', dateStr), genSleepDay(dateStr, dow));
+        }
+        if (targetUid === DEMO_6_UID && selectedClinicalMetrics.has('personality')) {
+          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsPersonality', dateStr), genPersonalityDay(dateStr, recent));
+        }
+        if (targetUid === DEMO_6_UID && selectedClinicalMetrics.has('adhd')) {
+          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsADHD', dateStr), genADHDDay(dateStr, recent, dow));
         }
       }
 
