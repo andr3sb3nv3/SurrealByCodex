@@ -21,9 +21,9 @@ import { formatDateKey, subDays } from '../utils/dateUtils';
 // Normalizing keys to lowercase to avoid case-sensitivity issues
 const DEMO_UID_MAP: Record<string, string> = {
   'demo@surreal.horizons': 'JDzx9vojl2dlKs5sg0gInEhRiHF3', // Demo 1 UID
-  'demo2@surreal.horizons': 'K9xL2vPq5mZ8jR3wT7nB4cE1aD6s', // Demo 2 UID
-  'demo3@surreal.horizons': 'PerfectStreak2025', // Demo 3 UID
-  'demo4@surreal.horizons': 'InconsistentStreak2025' // Demo 4 UID
+  'demo4@surreal.horizons': 'InconsistentStreak2025', // Demo 4 UID
+  'demo5@surreal.horizons': 'DemoMetricas1111111111', // Demo 5 UID
+  'demo6@surreal.horizons': 'DemoMetricas2222222222' // Demo 6 UID
 };
 
 // Demo 1 Metadata for Simulation

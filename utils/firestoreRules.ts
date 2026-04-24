@@ -1,7 +1,5 @@
 export const DEMO_UIDS = [
   'JDzx9vojl2dlKs5sg0gInEhRiHF3',
-  'K9xL2vPq5mZ8jR3wT7nB4cE1aD6s',
-  'PerfectStreak2025',
   'InconsistentStreak2025',
   'DemoMetricas1111111111',
   'DemoMetricas2222222222',

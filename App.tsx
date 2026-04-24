@@ -63,24 +63,10 @@ const DEMO_USER = createDemoUser({
   creationTime: new Date(2024, 9, 15).toISOString(),
 });
 
-const DEMO_USER_2 = createDemoUser({
-  uid: 'K9xL2vPq5mZ8jR3wT7nB4cE1aD6s',
-  displayName: 'Usuario Demo 2',
-  email: 'demo2@surreal.horizons',
-  creationTime: new Date(2025, 0, 10).toISOString(),
-});
-
-const DEMO_USER_3 = createDemoUser({
-  uid: 'PerfectStreak2025',
-  displayName: 'Usuario Demo 3',
-  email: 'demo3@surreal.horizons',
-  creationTime: new Date(2024, 11, 31).toISOString(),
-});
-
 const DEMO_USER_4 = createDemoUser({
   uid: 'InconsistentStreak2025',
-  displayName: 'Andrés Benve',
-  email: 'andres@surreal.horizons',
+  displayName: 'Demo Clínico 0110000000',
+  email: 'demo4@surreal.horizons',
   creationTime: new Date(2024, 11, 31).toISOString(),
 });
 
@@ -88,14 +74,14 @@ const DEMO_USER_4 = createDemoUser({
 // módulos clínicos (parseEnabledModules lee esa porción del displayName/uid).
 const DEMO_USER_5 = createDemoUser({
   uid: 'DemoMetricas1111111111',
-  displayName: 'Demo Métricas 1111111111',
+  displayName: 'Demo Clínico 0001000001',
   email: 'demo5@surreal.horizons',
   creationTime: new Date(Date.now() - 366 * 86400000).toISOString(),
 });
 
 const DEMO_USER_6 = createDemoUser({
   uid: 'DemoMetricas2222222222',
-  displayName: 'Demo Métricas 2222222222',
+  displayName: 'Demo Clínico 1111111111',
   email: 'demo6@surreal.horizons',
   creationTime: new Date(Date.now() - 366 * 86400000).toISOString(),
 });
@@ -109,7 +95,7 @@ export default function App() {
   const [isOnboarding, setIsOnboarding] = useState(false);
   const [needsProfile, setNeedsProfile] = useState(false);
   
-  // State for the Demo Mode: 0 = Off, 1 = Demo 1, 2 = Demo 2, 3 = Demo 3, 4 = Demo 4
+  // State for the Demo Mode: 0 = Off, 1 = Demo 1, 4 = Demo 4, 5 = Demo 5, 6 = Demo 6
   const [demoMode, setDemoMode] = useState<number>(4);
 
   // State for Pro Membership (Default to true as requested)
@@ -185,8 +171,8 @@ export default function App() {
       // Demo 1 is ALWAYS treated as a new user starting the app
       setIsOnboarding(true);
       setNeedsProfile(false);
-    } else if (demoMode === 2 || demoMode === 3 || demoMode === 4 || demoMode === 5 || demoMode === 6) {
-      // Demos 2..6 skip onboarding (Historical data views)
+    } else if (demoMode === 4 || demoMode === 5 || demoMode === 6) {
+      // Demos 4..6 skip onboarding (Historical data views)
       setIsOnboarding(false);
       setNeedsProfile(false);
     } else if (currentRealUser) {
@@ -384,8 +370,6 @@ export default function App() {
     if (sharedUserViewing) return sharedUserViewing;
     switch (demoMode) {
       case 1: return DEMO_USER;
-      case 2: return DEMO_USER_2;
-      case 3: return DEMO_USER_3;
       case 4: return DEMO_USER_4;
       case 5: return DEMO_USER_5;
       case 6: return DEMO_USER_6;
@@ -534,11 +518,9 @@ export default function App() {
               <div className="flex flex-col gap-1">
                 {[
                   { mode: 1, label: 'Demo 1 · Onboarding', hint: 'Flujo de nuevo usuario' },
-                  { mode: 2, label: 'Demo 2 · Histórico', hint: 'Usuario sin racha' },
-                  { mode: 3, label: 'Demo 3 · Racha perfecta', hint: 'Registros diarios' },
-                  { mode: 4, label: 'Demo 4 · Inconsistente', hint: 'Racha irregular' },
-                  { mode: 5, label: 'Demo 5 · Métricas clínicas', hint: '365 días · 10 módulos' },
-                  { mode: 6, label: 'Demo 6 · Dashboard + Clínico', hint: '365 días completos' },
+                  { mode: 4, label: 'Demo 4 · Depresión + Bipolar', hint: 'Últimos 3 meses' },
+                  { mode: 5, label: 'Demo 5 · Psicótico + Consumo', hint: '365 días imperfectos' },
+                  { mode: 6, label: 'Demo 6 · Completo', hint: '365 días · todos los trastornos' },
                 ].map(({ mode, label, hint }) => {
                   const active = demoMode === mode;
                   return (

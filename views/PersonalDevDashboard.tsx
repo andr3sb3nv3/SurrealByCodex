@@ -273,7 +273,7 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
     if (readOnly) return;
     if (!user || !db) return;
     setPopulating(true);
-    const result = await seedDemoUsers();
+    const result = await seedDemoUsers(user.uid);
     setPopulating(false);
     if (result.success) {
         showToast(t.dbSeeded, 'success');
