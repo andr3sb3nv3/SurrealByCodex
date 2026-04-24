@@ -102,7 +102,8 @@ export const getClinicalSeverityFromIdentifiers = (
 
 export const resolveUserClinicalMetrics = async (
   uid: string,
-  identifiers: Array<string | null | undefined> = []
+  identifiers: Array<string | null | undefined> = [],
+  options: { persistInferred?: boolean } = {}
 ): Promise<ClinicalMetricKey[]> => {
   if (!db) return DEFAULT_CLINICAL_METRICS;
   const settingsRef = doc(db, 'users', uid, 'settings', 'clinicalMetrics');
@@ -117,7 +118,9 @@ export const resolveUserClinicalMetrics = async (
 
   const inferredMetrics = deriveClinicalMetricsFromIdentifiers(identifiers);
   if (inferredMetrics.length > 0) {
-    await persistUserClinicalMetrics(uid, inferredMetrics);
+    if (options.persistInferred) {
+      await persistUserClinicalMetrics(uid, inferredMetrics);
+    }
     return inferredMetrics;
   }
 

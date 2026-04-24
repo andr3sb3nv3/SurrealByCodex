@@ -63,6 +63,25 @@ const removeUndefinedFields = <T>(value: T): T => {
   return value;
 };
 
+const commitBatchWithRetry = async (
+  commit: () => Promise<void>,
+  maxRetries = 3
+): Promise<void> => {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      await commit();
+      return;
+    } catch (error: unknown) {
+      const code = typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: string }).code)
+        : '';
+      const transient = ['aborted', 'unavailable', 'deadline-exceeded'].includes(code);
+      if (!transient || attempt === maxRetries) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
+    }
+  }
+};
+
 const DEMO_1_META = {
   uid: DEMO_1_UID,
   displayName: 'Usuario Demo 1',
@@ -211,7 +230,7 @@ export const seedDemoUsers = async (
       let opCount = 0;
       const commitAndResetBatch = async () => {
         if (opCount > 0) {
-          await batch.commit();
+          await commitBatchWithRetry(() => batch.commit());
           batch = writeBatch(db);
           opCount = 0;
         }
@@ -344,7 +363,7 @@ export const seedDemoUsers = async (
 
     const commitAndResetBatch = async () => {
         if (opCount > 0) {
-            await batch.commit();
+            await commitBatchWithRetry(() => batch.commit());
             batch = writeBatch(db);
             opCount = 0;
         }
