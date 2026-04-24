@@ -1,8 +1,10 @@
-import React from 'react';
-import { Activity, LogOut } from 'lucide-react';
-import { User } from 'firebase/auth';
+import React, { useEffect, useRef, useState } from 'react';
+import { Activity, LogOut, Camera } from 'lucide-react';
+import { User, updateProfile } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
 import { Language } from '../types';
 import { TRANSLATIONS } from '../translations';
+import { db } from '../services/firebase';
 
 interface CompanyHeaderProps {
   darkMode?: boolean; // Deprecated but kept for compatibility
@@ -17,6 +19,36 @@ interface CompanyHeaderProps {
 
 const CompanyHeader: React.FC<CompanyHeaderProps> = ({ onAuthClick, user, onProfileClick, language, isPro = false, onLogout }) => {
   const t = TRANSLATIONS[language];
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(user?.photoURL ?? null);
+
+  useEffect(() => {
+    setAvatarPreview(user?.photoURL ?? null);
+  }, [user?.photoURL]);
+
+  const handlePickAvatar = () => fileRef.current?.click();
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    if (file.size > 5 * 1024 * 1024) return;
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const image = reader.result as string;
+      setAvatarPreview(image);
+      try {
+        await updateProfile(user, { photoURL: image });
+        if (db) {
+          await setDoc(doc(db, 'users', user.uid), { photoURL: image }, { merge: true });
+          await setDoc(doc(db, 'users', user.uid, 'user_settings', 'preferences'), { photoURL: image, updatedAt: Date.now() }, { merge: true });
+        }
+      } catch (err) {
+        console.error('Error actualizando avatar', err);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   return (
     <div className="w-full py-4 border-b bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 sticky top-0 z-30 transition-colors duration-300">
@@ -42,14 +74,28 @@ const CompanyHeader: React.FC<CompanyHeaderProps> = ({ onAuthClick, user, onProf
                 onClick={onProfileClick}
                 className="flex items-center gap-3 hover:bg-black/5 dark:hover:bg-white/10 px-2 py-1 rounded-full transition-colors"
               >
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-md ${isPro ? 'bg-gradient-to-br from-indigo-500 to-purple-600' : 'bg-slate-400'}`}>
-                  {user.displayName ? user.displayName[0].toUpperCase() : 'U'}
+                <div className={`relative w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-md overflow-hidden ${isPro ? 'bg-gradient-to-br from-indigo-500 to-purple-600' : 'bg-slate-400'}`}>
+                  {avatarPreview ? (
+                    <img src={avatarPreview} alt="avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <span>{user.displayName ? user.displayName[0].toUpperCase() : 'U'}</span>
+                  )}
                 </div>
                 <div className="hidden md:flex flex-col items-start">
                   <span className="text-xs font-bold leading-none">{user.displayName || 'Usuario'}</span>
                   {isPro && <span className="text-[10px] opacity-70 leading-none mt-0.5">{t.proMember}</span>}
                 </div>
               </button>
+
+              <button
+                type="button"
+                onClick={handlePickAvatar}
+                className="text-xs hover:text-indigo-500 transition-colors p-2 rounded-full hover:bg-indigo-500/10"
+                title={t.uploadPhoto}
+              >
+                <Camera size={16} />
+              </button>
+              <input ref={fileRef} type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
 
               <div className="h-4 w-[1px] bg-current opacity-20 mx-1"></div>
               
