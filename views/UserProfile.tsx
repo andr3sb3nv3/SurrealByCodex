@@ -86,14 +86,22 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
 
   const t = TRANSLATIONS[language];
 
+  // Keep avatar aligned with currently selected user
+  useEffect(() => {
+    setAvatar(user?.photoURL || null);
+  }, [user?.uid, user?.photoURL]);
+
   // Calculate Streak & Fetch Data
   useEffect(() => {
     if (!user || !db) return;
+    let cancelled = false;
+    const currentUid = user.uid;
 
     const fetchStats = async () => {
       try {
-        const logsRef = collection(db, 'users', user.uid, 'daily_logs');
+        const logsRef = collection(db, 'users', currentUid, 'daily_logs');
         const snapshot = await getDocs(logsRef);
+        if (cancelled) return;
         
         const datesSet = new Set<string>();
         snapshot.forEach(doc => {
@@ -101,6 +109,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
             datesSet.add(doc.id);
         });
 
+        if (cancelled) return;
         setTotalLogs(datesSet.size);
 
         // Calculate Streak
@@ -119,7 +128,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
             if (datesSet.has(yesterdayStr)) {
                 checkDate = subDays(today, 1);
             } else {
-                setStreak(0);
+                if (!cancelled) setStreak(0);
                 return; 
             }
         }
@@ -136,7 +145,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
             }
         }
         
-        setStreak(currentStreak);
+        if (!cancelled) setStreak(currentStreak);
 
       } catch (error) {
         console.error("Error calculating streak:", error);
@@ -144,6 +153,9 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
     };
 
     fetchStats();
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
   // Fetch Connections on Load
