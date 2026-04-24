@@ -7,7 +7,7 @@ import { ClinicalDashboardProps, Language } from '../types';
 import CompanyHeader from '../components/CompanyHeader';
 import Toast from '../components/ui/Toast';
 import { useToast } from '../utils/useToast';
-import { parseEnabledModules } from '../utils/patologiaModules';
+import { CLINICAL_METRIC_TO_MODULE_ID, resolveUserClinicalMetrics } from '../utils/clinicalMetricsConfig';
 import {
   BaseSectionProps, ChartColors, RangeDays, pickLang,
 } from '../components/clinicalSections/shared';
@@ -145,6 +145,7 @@ const ClinicalDashboard: React.FC<ClinicalDashboardProps> = ({
 }) => {
   const lang = pickLang(language);
   const { toast, clearToast } = useToast();
+  const [enabledClinicalModuleIds, setEnabledClinicalModuleIds] = useState<string[]>([]);
 
   const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
   const chartColors: ChartColors = useMemo(() => ({
@@ -155,12 +156,30 @@ const ClinicalDashboard: React.FC<ClinicalDashboardProps> = ({
     tooltipText: isDark ? '#f1f5f9' : '#0f172a',
   }), [isDark]);
 
+  useEffect(() => {
+    let alive = true;
+    if (!user) {
+      setEnabledClinicalModuleIds([]);
+      return;
+    }
+    resolveUserClinicalMetrics(user.uid)
+      .then((metrics) => {
+        if (!alive) return;
+        const ids = metrics.map((metric) => CLINICAL_METRIC_TO_MODULE_ID[metric]);
+        setEnabledClinicalModuleIds(ids);
+      })
+      .catch(() => {
+        if (!alive) return;
+        setEnabledClinicalModuleIds([]);
+      });
+    return () => { alive = false; };
+  }, [user]);
+
   const availableTabs = useMemo(() => {
     if (!user) return [];
-    const enabled = parseEnabledModules([user.displayName, user.email, user.uid]);
-    const enabledIds = new Set(enabled.map(m => m.id));
+    const enabledIds = new Set(enabledClinicalModuleIds);
     return MODULE_TABS.filter(tab => enabledIds.has(tab.id));
-  }, [user]);
+  }, [enabledClinicalModuleIds, user]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [rangeDays, setRangeDays] = useState<RangeDays>(30);

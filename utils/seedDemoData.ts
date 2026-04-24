@@ -3,6 +3,11 @@ import type { DocumentReference } from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth } from '../services/firebase';
 import { DailyLog } from '../types';
+import {
+  DEFAULT_CLINICAL_METRICS,
+  persistUserClinicalMetrics,
+  type ClinicalMetricKey,
+} from './clinicalMetricsConfig';
 export { clearTargetedDemoUserData } from './clearDemoData';
 
 // UIDs deben coincidir con los definidos en App.tsx
@@ -277,7 +282,12 @@ export const seedDemoUsers = async (
         email: currentMeta.email,
         createdAt: new Date(Date.now() - days * 86400000).toISOString(),
         photoURL: null,
-        isDemo: true
+        isDemo: true,
+        clinicalMetrics: Array.from(selectedClinicalMetrics),
+      });
+      await addToBatch(doc(db, 'users', targetUid, 'settings', 'clinicalMetrics'), {
+        clinicalMetrics: Array.from(selectedClinicalMetrics),
+        updatedAt: Date.now(),
       });
       await addToBatch(doc(db, 'users', targetUid, 'Set_goals', 'current'), goalsData);
 
@@ -348,6 +358,7 @@ export const seedDemoUsers = async (
       }
 
       await commitAndResetBatch();
+      await persistUserClinicalMetrics(targetUid, Array.from(selectedClinicalMetrics));
       return { success: true };
     } catch (error: unknown) {
       const code = typeof error === 'object' && error !== null && 'code' in error

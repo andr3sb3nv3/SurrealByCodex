@@ -16,6 +16,7 @@ import { seedDemoUsers, clearTargetedDemoUserData, type DemoSeedConfig } from '.
 import { TRANSLATIONS } from '../translations';
 import Toast from '../components/ui/Toast';
 import { useToast } from '../utils/useToast';
+import { resolveUserClinicalMetrics, type ClinicalMetricKey } from '../utils/clinicalMetricsConfig';
 
 interface AICoachResponse {
   tactics: string[];
@@ -220,14 +221,32 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
 
       // Merge clinical metrics by date into dashboard logs so they can be
       // overlaid in the same chart with mood/energy/etc.
+      const enabledClinical = await resolveUserClinicalMetrics(user.uid);
+      setConfiguredClinicalMetrics(enabledClinical);
+      const clinicalMetricByKey: Record<string, ClinicalMetricKey> = {
+        clin_anxiety: 'anxiety',
+        clin_depression: 'depression',
+        clin_bipolar: 'bipolar',
+        clin_psychotic: 'schizophrenia',
+        clin_ocd: 'ocd',
+        clin_trauma: 'trauma',
+        clin_sleep: 'sleep',
+        clin_personality: 'personality',
+        clin_adhd: 'adhd',
+        clin_substance: 'substance',
+      };
+      const filteredClinicalSeeds = CLINICAL_METRIC_SEEDS.filter((metric) => {
+        const mapped = clinicalMetricByKey[metric.key];
+        return mapped ? enabledClinical.includes(mapped) : false;
+      });
       const clinicalSnapshots = await Promise.all(
-        CLINICAL_METRIC_SEEDS.map((metric) => getDocs(collection(db, 'users', user.uid, metric.collectionName)))
+        filteredClinicalSeeds.map((metric) => getDocs(collection(db, 'users', user.uid, metric.collectionName)))
       );
       const rowsByDate = new Map<string, DashboardDataPoint>();
       historyData.forEach((row) => rowsByDate.set(row.fecha, row));
 
       clinicalSnapshots.forEach((snap, idx) => {
-        const metric = CLINICAL_METRIC_SEEDS[idx];
+        const metric = filteredClinicalSeeds[idx];
         snap.forEach((clinicalDoc) => {
           const entry = clinicalDoc.data() as Record<string, unknown>;
           const dateKey = (entry.dateKey as string | undefined) || clinicalDoc.id;
