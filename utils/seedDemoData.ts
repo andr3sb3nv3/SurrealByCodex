@@ -4,6 +4,7 @@ import { writeBatch, doc, getDoc, DocumentReference } from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth } from '../services/firebase';
 import { DailyLog } from '../types';
+export { clearTargetedDemoUserData } from './clearDemoData';
 
 // UIDs deben coincidir con los definidos en App.tsx
 const DEMO_1_UID = 'JDzx9vojl2dlKs5sg0gInEhRiHF3';
