@@ -262,7 +262,60 @@ export const seedDemoUsers = async (): Promise<{success: boolean, error?: string
       initial: DEMO_2_META.initial
     });
 
-    // 5. DEMO 5 — Métricas clínicas completas (últimos 365 días, los 10 módulos).
+    // 5. DEMO 3 — Métricas clínicas completas (últimos 365 días, los 10 módulos).
+    // Esto permite comparar en Dashboard los indicadores base vs clínicos.
+    const today3 = new Date();
+    today3.setHours(12, 0, 0, 0);
+    for (let back = 364; back >= 0; back--) {
+      const d = new Date(today3);
+      d.setDate(today3.getDate() - back);
+      const dateStr = d.toISOString().split('T')[0];
+      const recent = 1 - (back / 365); // 0 = hace un año, 1 = hoy
+      const dow = d.getDay();
+
+      await addToBatch(
+        doc(db, 'users', DEMO_3_UID, 'deepClinicalLogsAnxiety', dateStr),
+        genAnxietyDay(dateStr, recent, dow)
+      );
+      await addToBatch(
+        doc(db, 'users', DEMO_3_UID, 'deepClinicalLogsDepression', dateStr),
+        genDepressionDay(dateStr, recent, dow)
+      );
+      await addToBatch(
+        doc(db, 'users', DEMO_3_UID, 'deepClinicalLogsBipolar', dateStr),
+        genBipolarDay(dateStr, back)
+      );
+      await addToBatch(
+        doc(db, 'users', DEMO_3_UID, 'deepClinicalLogsSchizophrenia', dateStr),
+        genSchizoDay(dateStr, recent)
+      );
+      await addToBatch(
+        doc(db, 'users', DEMO_3_UID, 'deepClinicalLogsOCD', dateStr),
+        genOCDDay(dateStr, recent)
+      );
+      await addToBatch(
+        doc(db, 'users', DEMO_3_UID, 'deepClinicalLogsTrauma', dateStr),
+        genTraumaDay(dateStr, recent)
+      );
+      await addToBatch(
+        doc(db, 'users', DEMO_3_UID, 'deepClinicalLogsSleep', dateStr),
+        genSleepDay(dateStr, dow)
+      );
+      await addToBatch(
+        doc(db, 'users', DEMO_3_UID, 'deepClinicalLogsPersonality', dateStr),
+        genPersonalityDay(dateStr, recent)
+      );
+      await addToBatch(
+        doc(db, 'users', DEMO_3_UID, 'deepClinicalLogsADHD', dateStr),
+        genADHDDay(dateStr, recent, dow)
+      );
+      await addToBatch(
+        doc(db, 'users', DEMO_3_UID, 'deepClinicalLogsSubstance', dateStr),
+        genSubstanceDay(dateStr, recent)
+      );
+    }
+
+    // 6. DEMO 5 — Métricas clínicas completas (últimos 365 días, los 10 módulos).
     // Idempotencia: si el doc raíz ya existe, saltamos la generación para
     // no volver a escribir 3650 docs cada vez que se toca "Demo".
     const demo5Root = await getDoc(doc(db, 'users', DEMO_5_UID));
