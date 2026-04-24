@@ -22,9 +22,9 @@ export const isEncryptionActive = (): boolean => {
 };
 
 // Encrypt a string or object
-export const encryptData = (data: any): string => {
+export const encryptData = (data: unknown): string => {
   const key = getEncryptionKey();
-  if (!key) return data; // Return as is if no key (fallback)
+  if (!key) return typeof data === 'string' ? data : JSON.stringify(data); // Return as is if no key (fallback)
   
   try {
     const stringData = typeof data === 'string' ? data : JSON.stringify(data);
@@ -51,7 +51,7 @@ export const decryptData = (ciphertext: string): string => {
 };
 
 // Decrypt a JSON object
-export const decryptObject = (ciphertext: string): any => {
+export const decryptObject = (ciphertext: string): unknown => {
   const text = decryptData(ciphertext);
   if (!text) return null;
   try {

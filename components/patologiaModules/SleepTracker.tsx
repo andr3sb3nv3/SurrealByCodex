@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Moon, Sun, Clock, Coffee, Sparkles, CheckCircle2, Zap, Loader2 } from 'lucide-react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
+import { MODULE_COLLECTIONS } from './shared';
 import { PatologiaModuleProps } from '../../utils/patologiaModules';
 import { Language } from '../../types';
 
@@ -101,7 +102,7 @@ const SleepTracker: React.FC<PatologiaModuleProps> = ({ userId, dateKey, readOnl
       if (!db || !userId) { setStatus('idle'); return; }
       try {
         setStatus('loading');
-        const ref = doc(db, 'users', userId, 'deepClinicalLogsSleep', dateKey);
+        const ref = doc(db, MODULE_COLLECTIONS.users, userId, MODULE_COLLECTIONS.sleep, dateKey);
         const snap = await getDoc(ref);
         if (cancelled) return;
         if (snap.exists()) {
@@ -124,7 +125,7 @@ const SleepTracker: React.FC<PatologiaModuleProps> = ({ userId, dateKey, readOnl
     setStatus('saving');
     setErrorMsg(null);
     try {
-      const ref = doc(db, 'users', userId, 'deepClinicalLogsSleep', dateKey);
+      const ref = doc(db, MODULE_COLLECTIONS.users, userId, MODULE_COLLECTIONS.sleep, dateKey);
       await setDoc(ref, { ...entry, dateKey, updatedAt: Date.now() }, { merge: true });
       setStatus('saved');
       setTimeout(() => setStatus('idle'), 2000);

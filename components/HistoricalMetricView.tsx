@@ -46,6 +46,11 @@ interface Props {
 }
 
 type RangeMonths = 3 | 6 | 12;
+type MetricLog = DailyLog & Record<string, unknown>;
+const getMetricValue = (log: DailyLog, field: string): number | null => {
+  const value = (log as MetricLog)[field];
+  return typeof value === 'number' && !Number.isNaN(value) ? value : null;
+};
 
 const HistoricalMetricView: React.FC<Props> = ({
   metrics, rawData, initialMetricKey, chartColors, labels, onClose
@@ -72,8 +77,7 @@ const HistoricalMetricView: React.FC<Props> = ({
     return rawData
       .filter(log => new Date(log.fecha).getTime() >= cutoff.getTime())
       .filter(log => {
-        const v = (log as any)[field];
-        return typeof v === 'number' && !Number.isNaN(v);
+        return getMetricValue(log, field) !== null;
       })
       .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
   }, [rawData, currentMetric, range]);
@@ -82,8 +86,8 @@ const HistoricalMetricView: React.FC<Props> = ({
     if (!currentMetric || filteredData.length === 0) return null;
     const field = currentMetric.dbField as string;
     const values = filteredData
-      .map(log => (log as any)[field])
-      .filter((v: unknown): v is number => typeof v === 'number' && !Number.isNaN(v));
+      .map(log => getMetricValue(log, field))
+      .filter((v): v is number => typeof v === 'number');
     if (values.length === 0) return null;
     const sum = values.reduce((acc: number, v: number) => acc + v, 0);
     return { value: sum / values.length, count: values.length };
@@ -91,9 +95,15 @@ const HistoricalMetricView: React.FC<Props> = ({
 
   const gradId = `histGrad-${currentMetric?.key ?? 'x'}`;
 
-  const handleChartClick = (e: any) => {
-    if (e && e.activePayload && e.activePayload.length > 0) {
-      const payload = e.activePayload[0].payload as DailyLog;
+  const handleChartClick = (e: unknown) => {
+    if (
+      e &&
+      typeof e === 'object' &&
+      'activePayload' in e &&
+      Array.isArray((e as { activePayload?: unknown[] }).activePayload) &&
+      (e as { activePayload: Array<{ payload?: DailyLog }> }).activePayload.length > 0
+    ) {
+      const payload = (e as { activePayload: Array<{ payload?: DailyLog }> }).activePayload[0]?.payload;
       if (payload) setSelectedLog(payload);
     }
   };
@@ -296,8 +306,8 @@ const DayDetailModal: React.FC<DayDetailProps> = ({ log, metrics, labels, highli
         <div className="p-6 space-y-4 overflow-y-auto">
           <div className="grid grid-cols-2 gap-2">
             {metrics.map(m => {
-              const val = (log as any)[m.dbField];
-              if (typeof val !== 'number') return null;
+              const val = getMetricValue(log, m.dbField as string);
+              if (val === null) return null;
               const highlighted = m.key === highlightMetricKey;
               return (
                 <div
