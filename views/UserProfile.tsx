@@ -303,6 +303,16 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
         setIsSearchingUser(true);
         
         try {
+            const createPendingInvite = async () => {
+              await addDoc(collection(db, COLLECTIONS.pendingInvites), {
+                toEmail: normalizedEmail,
+                fromUid: user.uid,
+                fromName: user.displayName || 'Usuario',
+                fromEmail: user.email || '',
+                createdAt: Date.now()
+              });
+            };
+
             // 1. Write to local outgoing collection
             // Stores the entered email as the ID for easy lookup/deletion by email
             await setDoc(doc(db, COLLECTIONS.users, user.uid, COLLECTIONS.outgoing, normalizedEmail), {
@@ -352,8 +362,17 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
             if (targetUid && reciprocalSuccess) {
                 showToast(t.userAdded, 'success');
             } else if (targetUid && !reciprocalSuccess) {
-                // Found but permission failed
-                showToast("Usuario agregado, pero falló la notificación automática (Error Permisos DB)", 'warning');
+                // Found but direct write blocked by rules (common when sharing from
+                // demo user to a real user). Fallback to pending invite so the
+                // recipient can be linked asynchronously.
+                try {
+                  await createPendingInvite();
+                  showToast(t.invitationSent, 'success');
+                  setTimeout(() => showToast(t.invitationSentDesc, 'success'), 2500);
+                } catch (inviteError) {
+                  console.error("Invite fallback creation failed:", inviteError);
+                  showToast("Usuario agregado, pero falló el envío de invitación automática.", 'warning');
+                }
             } else {
                 // NOT FOUND (New User / Not Logged In) -> Create Pending Invitation
                 try {
