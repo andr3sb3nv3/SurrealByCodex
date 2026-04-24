@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Users, Zap, MessageSquare, CheckCircle2, Shield, UserCircle, Wind, Loader2 } from 'lucide-react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
+import { MODULE_COLLECTIONS } from './shared';
 import { PatologiaModuleProps } from '../../utils/patologiaModules';
 import { Language } from '../../types';
 
@@ -124,7 +125,7 @@ const PersonalityTracker: React.FC<PatologiaModuleProps> = ({ userId, dateKey, r
       if (!db || !userId) { setStatus('idle'); return; }
       try {
         setStatus('loading');
-        const ref = doc(db, 'users', userId, 'deepClinicalLogsPersonality', dateKey);
+        const ref = doc(db, MODULE_COLLECTIONS.users, userId, MODULE_COLLECTIONS.personality, dateKey);
         const snap = await getDoc(ref);
         if (cancelled) return;
         if (snap.exists()) {
@@ -147,7 +148,7 @@ const PersonalityTracker: React.FC<PatologiaModuleProps> = ({ userId, dateKey, r
     setStatus('saving');
     setErrorMsg(null);
     try {
-      const ref = doc(db, 'users', userId, 'deepClinicalLogsPersonality', dateKey);
+      const ref = doc(db, MODULE_COLLECTIONS.users, userId, MODULE_COLLECTIONS.personality, dateKey);
       await setDoc(ref, { ...entry, dateKey, updatedAt: Date.now() }, { merge: true });
       setStatus('saved');
       setTimeout(() => setStatus('idle'), 2000);

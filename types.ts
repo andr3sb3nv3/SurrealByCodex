@@ -106,3 +106,15 @@ export interface UserProfileProps extends ViewProps {
   onShowRules?: () => void;
   onNavigateToYearPixels: () => void;
 }
+
+export interface OutgoingConnection {
+  email: string;
+  addedAt?: number;
+}
+
+export interface IncomingConnection {
+  ownerUid: string;
+  displayName?: string;
+  email?: string;
+  initial?: string;
+}
