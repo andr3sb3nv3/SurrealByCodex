@@ -23,12 +23,24 @@ interface AICoachResponse {
   quote: string;
 }
 
+type BaseMetricField =
+  | 'estado_animo'
+  | 'nivel_energia'
+  | 'nivel_deporte'
+  | 'calidad_sueno'
+  | 'social_confort'
+  | 'nivel_motivacion'
+  | 'nivel_concentracion'
+  | 'regulacion_emocional';
+
+type DashboardDataPoint = DailyLog & Record<string, string | number | undefined>;
+
 const PersonalDevDashboard: React.FC<DashboardProps> = ({
   onBack, user, authUser, onNavigateToComments, onNavigateToClinicalMetrics, onAuthRequest, onNavigateToProfile,
   language, onToggleLanguage, isPro, onTogglePro, theme,
   readOnly, viewingFriendName, onExitSharedView, onLogout
 }) => {
-  const [rawData, setRawData] = useState<DailyLog[]>([]);
+  const [rawData, setRawData] = useState<DashboardDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [populating, setPopulating] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
@@ -149,18 +161,18 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
     try {
       if(!db) throw new Error("No db");
       const snapshot = await getDocs(collection(db, 'users', user.uid, 'daily_logs'));
-      const METRIC_FIELDS: (keyof DailyLog)[] = [
+      const METRIC_FIELDS: BaseMetricField[] = [
         'estado_animo', 'nivel_energia', 'nivel_deporte', 'calidad_sueno',
         'social_confort', 'nivel_motivacion', 'nivel_concentracion', 'regulacion_emocional'
       ];
-      const historyData: DailyLog[] = [];
+      const historyData: DashboardDataPoint[] = [];
       snapshot.forEach(doc => {
-        const log = doc.data() as DailyLog;
+        const log = doc.data() as DashboardDataPoint;
         // Normalizamos legacy 0-100 → 1-10 para que charts y stats sean consistentes.
         for (const f of METRIC_FIELDS) {
           const v = log[f];
           if (typeof v === 'number' && v > 10) {
-            (log as any)[f] = Math.round(v / 10);
+            log[f] = Math.round(v / 10);
           }
         }
         historyData.push(log);
@@ -171,7 +183,7 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
       const clinicalSnapshots = await Promise.all(
         CLINICAL_METRIC_SEEDS.map((metric) => getDocs(collection(db, 'users', user.uid, metric.collectionName)))
       );
-      const rowsByDate = new Map<string, DailyLog>();
+      const rowsByDate = new Map<string, DashboardDataPoint>();
       historyData.forEach((row) => rowsByDate.set(row.fecha, row));
 
       clinicalSnapshots.forEach((snap, idx) => {
@@ -185,7 +197,7 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
           const normalized = Math.max(0, Math.min(10, Math.round(metric.toScale10(raw) * 10) / 10));
           const existing = rowsByDate.get(dateKey);
           if (!existing) return;
-          (existing as any)[metric.key] = normalized;
+          existing[metric.key] = normalized;
         });
       });
 
@@ -223,7 +235,7 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
   const activeMetrics = useMemo(() => {
     return METRIC_CONFIG.filter(metric => {
       // Check Data Existence (Optimization: Avoid showing empty flat lines 0)
-      const hasData = data.some((log: any) => {
+      const hasData = data.some((log) => {
         const val = log[metric.dbField];
         return typeof val === 'number' && !Number.isNaN(val) && val > 0;
       });
@@ -261,7 +273,7 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
     if (readOnly) return;
     if (!user || !db) return;
     setPopulating(true);
-    const result = await seedDemoUsers();
+    const result = await seedDemoUsers(user.uid);
     setPopulating(false);
     if (result.success) {
         showToast(t.dbSeeded, 'success');
@@ -304,9 +316,9 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
     activeMetrics.forEach(m => {
        let sum = 0;
        let count = 0;
-       data.forEach((curr: any) => {
+       data.forEach((curr) => {
            const raw = curr[m.dbField];
-           if (raw !== undefined && raw !== null) {
+           if (typeof raw === 'number') {
                // Normalizamos datos legacy en 0-100.
                const val = raw > 10 ? raw / 10 : raw;
                sum += val;

@@ -8,7 +8,7 @@ import { db } from '../../services/firebase';
 import Card from '../ui/Card';
 import {
   BaseSectionProps, KpiCard, SectionLoader, SectionEmpty, HistoryItem, Badge, Chip,
-  buildTooltipStyle, inRange, pickLang,
+  buildTooltipStyle, inRange, pickLang, CLINICAL_COLLECTIONS,
 } from './shared';
 
 interface Entry {
@@ -23,6 +23,8 @@ interface Entry {
   caffeineIntake: number;
   hoursSlept: number;        // computed
 }
+
+type SleepEntryDoc = Partial<Omit<Entry, 'hoursSlept'>> & { dateKey?: string };
 
 const STR = {
   es: {
@@ -67,22 +69,22 @@ const SleepSection: React.FC<BaseSectionProps> = ({ user, rangeDays, language, c
     (async () => {
       setLoading(true);
       try {
-        const snap = await getDocs(collection(db, 'users', user.uid, 'deepClinicalLogsSleep'));
+        const snap = await getDocs(collection(db, CLINICAL_COLLECTIONS.users, user.uid, CLINICAL_COLLECTIONS.sleep));
         const list: Entry[] = [];
         snap.forEach(d => {
-          const data = d.data() as any;
-          const bed = data.bedTime ?? '23:00';
-          const wake = data.wakeTime ?? '07:00';
+          const data = d.data() as SleepEntryDoc;
+          const bed = typeof data.bedTime === 'string' ? data.bedTime : '23:00';
+          const wake = typeof data.wakeTime === 'string' ? data.wakeTime : '07:00';
           list.push({
-            dateKey: data.dateKey ?? d.id,
+            dateKey: typeof data.dateKey === 'string' ? data.dateKey : d.id,
             bedTime: bed,
             wakeTime: wake,
-            sleepLatency: data.sleepLatency ?? 0,
-            awakeningsCount: data.awakeningsCount ?? 0,
-            sleepQuality: data.sleepQuality ?? 3,
-            daytimeSleepiness: data.daytimeSleepiness ?? 2,
+            sleepLatency: typeof data.sleepLatency === 'number' ? data.sleepLatency : 0,
+            awakeningsCount: typeof data.awakeningsCount === 'number' ? data.awakeningsCount : 0,
+            sleepQuality: typeof data.sleepQuality === 'number' ? data.sleepQuality : 3,
+            daytimeSleepiness: typeof data.daytimeSleepiness === 'number' ? data.daytimeSleepiness : 2,
             usedMedication: !!data.usedMedication,
-            caffeineIntake: data.caffeineIntake ?? 0,
+            caffeineIntake: typeof data.caffeineIntake === 'number' ? data.caffeineIntake : 0,
             hoursSlept: computeHours(bed, wake),
           });
         });
