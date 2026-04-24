@@ -27,6 +27,18 @@ export const DEFAULT_CLINICAL_METRICS: ClinicalMetricKey[] = [
 ];
 
 const CLINICAL_METRIC_SET = new Set<ClinicalMetricKey>(DEFAULT_CLINICAL_METRICS);
+const METRIC_ORDER_BY_DIGIT: ClinicalMetricKey[] = [
+  'anxiety',
+  'depression',
+  'bipolar',
+  'schizophrenia',
+  'ocd',
+  'trauma',
+  'sleep',
+  'personality',
+  'adhd',
+  'substance',
+];
 
 export const CLINICAL_METRIC_TO_MODULE_ID: Record<ClinicalMetricKey, string> = {
   anxiety: 'anxiety_log',
@@ -53,7 +65,45 @@ export const sanitizeClinicalMetrics = (raw: unknown): ClinicalMetricKey[] => {
   return out;
 };
 
-export const resolveUserClinicalMetrics = async (uid: string): Promise<ClinicalMetricKey[]> => {
+const extractTenDigitCode = (identifiers: Array<string | null | undefined>): string | null => {
+  for (const raw of identifiers) {
+    if (!raw) continue;
+    const runs = raw.trim().match(/\d+/g);
+    if (!runs) continue;
+    for (let i = runs.length - 1; i >= 0; i--) {
+      if (runs[i].length >= 10) return runs[i].slice(-10);
+    }
+  }
+  return null;
+};
+
+export const deriveClinicalMetricsFromIdentifiers = (identifiers: Array<string | null | undefined>): ClinicalMetricKey[] => {
+  const code = extractTenDigitCode(identifiers);
+  if (!code) return [];
+  const inferred: ClinicalMetricKey[] = [];
+  for (let i = 0; i < METRIC_ORDER_BY_DIGIT.length; i++) {
+    const digit = Number.parseInt(code[i] ?? '0', 10);
+    if (Number.isFinite(digit) && digit > 0) inferred.push(METRIC_ORDER_BY_DIGIT[i]);
+  }
+  return inferred;
+};
+
+export const getClinicalSeverityFromIdentifiers = (
+  identifiers: Array<string | null | undefined>,
+  metric: ClinicalMetricKey
+): number => {
+  const code = extractTenDigitCode(identifiers);
+  if (!code) return 5;
+  const idx = METRIC_ORDER_BY_DIGIT.indexOf(metric);
+  if (idx < 0) return 5;
+  const severity = Number.parseInt(code[idx] ?? '5', 10);
+  return Number.isFinite(severity) && severity > 0 ? severity : 5;
+};
+
+export const resolveUserClinicalMetrics = async (
+  uid: string,
+  identifiers: Array<string | null | undefined> = []
+): Promise<ClinicalMetricKey[]> => {
   if (!db) return DEFAULT_CLINICAL_METRICS;
   const settingsRef = doc(db, 'users', uid, 'settings', 'clinicalMetrics');
   const userRef = doc(db, 'users', uid);
@@ -64,6 +114,12 @@ export const resolveUserClinicalMetrics = async (uid: string): Promise<ClinicalM
 
   const userMetrics = sanitizeClinicalMetrics(userSnap.data()?.clinicalMetrics);
   if (userMetrics.length > 0) return userMetrics;
+
+  const inferredMetrics = deriveClinicalMetricsFromIdentifiers(identifiers);
+  if (inferredMetrics.length > 0) {
+    await persistUserClinicalMetrics(uid, inferredMetrics);
+    return inferredMetrics;
+  }
 
   return DEFAULT_CLINICAL_METRICS;
 };

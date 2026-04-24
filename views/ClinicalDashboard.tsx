@@ -162,7 +162,7 @@ const ClinicalDashboard: React.FC<ClinicalDashboardProps> = ({
       setEnabledClinicalModuleIds([]);
       return;
     }
-    resolveUserClinicalMetrics(user.uid)
+    resolveUserClinicalMetrics(user.uid, [user.displayName, user.email, user.uid])
       .then((metrics) => {
         if (!alive) return;
         const ids = metrics.map((metric) => CLINICAL_METRIC_TO_MODULE_ID[metric]);
