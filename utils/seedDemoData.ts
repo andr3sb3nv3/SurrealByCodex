@@ -1,4 +1,4 @@
-import { writeBatch, doc, getDoc } from 'firebase/firestore';
+import { writeBatch, doc, getDoc, getDocs, collection, DocumentReference } from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth } from '../services/firebase';
 import { DailyLog } from '../types';
@@ -14,6 +14,7 @@ const DEMO_5_UID = 'DemoMetricas1111111111';
 // Demo 6: también termina en 10 dígitos distintos de cero para activar
 // los 10 módulos clínicos y mantener paridad con Demo 5.
 const DEMO_6_UID = 'DemoMetricas2222222222';
+const TARGETED_DEMO_UIDS = [DEMO_4_UID, DEMO_5_UID, DEMO_6_UID] as const;
 
 const DEMO_1_META = {
   uid: DEMO_1_UID,
@@ -121,7 +122,7 @@ const generateRandomLog = (dateStr: string, isHighPerformer: boolean): DailyLog 
   };
 };
 
-export const seedDemoUsers = async (): Promise<{success: boolean, error?: string}> => {
+export const seedDemoUsers = async (targetUid?: string): Promise<{success: boolean, error?: string}> => {
   if (!db || !auth) {
     return { success: false, error: "Database not initialized" };
   }
@@ -132,6 +133,124 @@ export const seedDemoUsers = async (): Promise<{success: boolean, error?: string
       await signInAnonymously(auth);
     } catch (e) {
       console.warn("Could not sign in anonymously:", e);
+    }
+  }
+
+  // Nuevo flujo focalizado por demo (botón "Generar demo" sobre el usuario actual).
+  if (targetUid && TARGETED_DEMO_UIDS.includes(targetUid as typeof TARGETED_DEMO_UIDS[number])) {
+    try {
+      const goalsData = {
+        updatedAt: Date.now(),
+        goals: [
+          { id: 1, text: "Chequeo diario de bienestar", category: "Salud", completed: false, resourceKey: 'general' },
+          { id: 2, text: "Cumplir prioridad del día", category: "Trabajo", completed: false, resourceKey: 'focus' },
+          { id: 3, text: "Espacio de autocuidado", category: "Espiritual", completed: false, resourceKey: 'mindfulness' }
+        ]
+      };
+
+      const userMeta: Record<string, { displayName: string; email: string }> = {
+        [DEMO_4_UID]: { displayName: 'Demo Clínico 0110000000', email: 'demo4@surreal.horizons' }, // Depresión + Bipolar
+        [DEMO_5_UID]: { displayName: 'Demo Clínico 0001000001', email: 'demo5@surreal.horizons' }, // Psicótico + Consumo
+        [DEMO_6_UID]: { displayName: 'Demo Clínico 1111111111', email: 'demo6@surreal.horizons' }, // Todos
+      };
+
+      const currentMeta = userMeta[targetUid];
+      if (!currentMeta) return { success: false, error: 'invalid-demo-target' };
+
+      let batch = writeBatch(db);
+      let opCount = 0;
+      const commitAndResetBatch = async () => {
+        if (opCount > 0) {
+          await batch.commit();
+          batch = writeBatch(db);
+          opCount = 0;
+        }
+      };
+      const addToBatch = async (ref: DocumentReference, data: object) => {
+        batch.set(ref, data);
+        opCount++;
+        if (opCount >= 450) await commitAndResetBatch();
+      };
+
+      const buildThreeGoals = () => {
+        const completed = rnd(0, 3);
+        const all = goalsData.goals.map(g => ({ tarea: g.text, categoria: g.category }));
+        return {
+          completed,
+          objetivos_completados: all.slice(0, completed),
+          objetivos_pendientes: all.slice(completed),
+        };
+      };
+
+      const maybeReflection = () => chance(0.45)
+        ? pickOne(REFLECTIONS_DEMO_2)
+        : '';
+
+      const days = targetUid === DEMO_4_UID ? 90 : 365;
+      const omitProbability = targetUid === DEMO_5_UID ? 0.35 : 0; // Demo 5 imperfecto
+      const today = new Date();
+      today.setHours(12, 0, 0, 0);
+
+      await addToBatch(doc(db, 'users', targetUid), {
+        uid: targetUid,
+        displayName: currentMeta.displayName,
+        email: currentMeta.email,
+        createdAt: new Date(Date.now() - days * 86400000).toISOString(),
+        photoURL: null,
+        isDemo: true
+      });
+      await addToBatch(doc(db, 'users', targetUid, 'Set_goals', 'current'), goalsData);
+
+      for (let back = days - 1; back >= 0; back--) {
+        const d = new Date(today);
+        d.setDate(today.getDate() - back);
+        const dateStr = d.toISOString().split('T')[0];
+        const recent = 1 - (back / Math.max(days, 1));
+        const dow = d.getDay();
+
+        if (chance(omitProbability)) continue;
+
+        const log = generateRandomLog(dateStr, targetUid !== DEMO_5_UID);
+        const goalsProgress = buildThreeGoals();
+        log.reflexion = maybeReflection();
+        log.audio_note = undefined;
+        log.objetivos_completados = goalsProgress.objetivos_completados;
+        log.objetivos_pendientes = goalsProgress.objetivos_pendientes;
+        log.progreso_porcentaje = Math.round((goalsProgress.completed / 3) * 100);
+
+        await addToBatch(doc(db, 'users', targetUid, 'daily_logs', dateStr), log);
+
+        if (targetUid === DEMO_4_UID || targetUid === DEMO_6_UID) {
+          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsDepression', dateStr), genDepressionDay(dateStr, recent, dow));
+          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsBipolar', dateStr), genBipolarDay(dateStr, back));
+        }
+
+        if (targetUid === DEMO_5_UID || targetUid === DEMO_6_UID) {
+          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsSchizophrenia', dateStr), genSchizoDay(dateStr, recent));
+          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsSubstance', dateStr), genSubstanceDay(dateStr, recent));
+        }
+
+        if (targetUid === DEMO_6_UID) {
+          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsAnxiety', dateStr), genAnxietyDay(dateStr, recent, dow));
+          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsOCD', dateStr), genOCDDay(dateStr, recent));
+          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsTrauma', dateStr), genTraumaDay(dateStr, recent));
+          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsSleep', dateStr), genSleepDay(dateStr, dow));
+          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsPersonality', dateStr), genPersonalityDay(dateStr, recent));
+          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsADHD', dateStr), genADHDDay(dateStr, recent, dow));
+        }
+      }
+
+      await commitAndResetBatch();
+      return { success: true };
+    } catch (error: unknown) {
+      const code = typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: string }).code)
+        : '';
+      if (code === 'permission-denied') return { success: false, error: 'permission-denied' };
+      const message = typeof error === 'object' && error !== null && 'message' in error
+        ? String((error as { message?: string }).message)
+        : 'unknown';
+      return { success: false, error: message };
     }
   }
   
@@ -151,7 +270,7 @@ export const seedDemoUsers = async (): Promise<{success: boolean, error?: string
         }
     };
 
-    const addToBatch = async (ref: any, data: any) => {
+    const addToBatch = async (ref: DocumentReference, data: object) => {
         batch.set(ref, data);
         opCount++;
         if (opCount >= 450) { // Margen de seguridad antes de 500
@@ -430,13 +549,90 @@ export const seedDemoUsers = async (): Promise<{success: boolean, error?: string
     console.log("Datos generados exitosamente para Demo 1, 2, 3, 4, 5 y 6.");
     return { success: true };
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error al generar datos demo:", error);
     // Return specific error code for UI handling
-    if (error.code === 'permission-denied') {
+    const code = typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code?: string }).code)
+      : '';
+    if (code === 'permission-denied') {
         return { success: false, error: 'permission-denied' };
     }
-    return { success: false, error: error.message };
+    const message = typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message?: string }).message)
+      : 'unknown';
+    return { success: false, error: message };
+  }
+};
+
+export const clearTargetedDemoUserData = async (targetUid: string): Promise<{success: boolean, error?: string}> => {
+  if (!db || !auth) {
+    return { success: false, error: "Database not initialized" };
+  }
+
+  if (!TARGETED_DEMO_UIDS.includes(targetUid as typeof TARGETED_DEMO_UIDS[number])) {
+    return { success: false, error: "invalid-demo-target" };
+  }
+
+  if (!auth.currentUser) {
+    try {
+      await signInAnonymously(auth);
+    } catch (e) {
+      console.warn("Could not sign in anonymously:", e);
+    }
+  }
+
+  const collectionsToClear = [
+    'daily_logs',
+    'Set_goals',
+    'deepClinicalLogsAnxiety',
+    'deepClinicalLogsDepression',
+    'deepClinicalLogsBipolar',
+    'deepClinicalLogsSchizophrenia',
+    'deepClinicalLogsOCD',
+    'deepClinicalLogsTrauma',
+    'deepClinicalLogsSleep',
+    'deepClinicalLogsPersonality',
+    'deepClinicalLogsADHD',
+    'deepClinicalLogsSubstance',
+  ] as const;
+
+  try {
+    let batch = writeBatch(db);
+    let opCount = 0;
+    const commitAndResetBatch = async () => {
+      if (opCount > 0) {
+        await batch.commit();
+        batch = writeBatch(db);
+        opCount = 0;
+      }
+    };
+
+    const addDeleteToBatch = async (ref: DocumentReference) => {
+      batch.delete(ref);
+      opCount++;
+      if (opCount >= 450) await commitAndResetBatch();
+    };
+
+    for (const col of collectionsToClear) {
+      const snap = await getDocs(collection(db, 'users', targetUid, col));
+      for (const row of snap.docs) {
+        await addDeleteToBatch(row.ref as DocumentReference);
+      }
+    }
+
+    await addDeleteToBatch(doc(db, 'users', targetUid) as DocumentReference);
+    await commitAndResetBatch();
+    return { success: true };
+  } catch (error: unknown) {
+    const code = typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code?: string }).code)
+      : '';
+    if (code === 'permission-denied') return { success: false, error: 'permission-denied' };
+    const message = typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message?: string }).message)
+      : 'unknown';
+    return { success: false, error: message };
   }
 };
 // -------------------------------------------------------------------------

@@ -12,7 +12,7 @@ interface AppGuideAssistantProps {
   setMotivationLevel?: (val: number) => void;
   setConcentrationLevel?: (val: number) => void;
   setRegulationLevel?: (val: number) => void;
-  setReflection?: (val: any) => void;
+  setReflection?: React.Dispatch<React.SetStateAction<string>>;
   goals?: Goal[];
   onUpdateGoal?: (id: number, status: boolean) => void;
   onSaveRequest?: () => void;
@@ -30,10 +30,28 @@ interface QuestionStep {
   id?: string | number;
   label: string;
   question: string;
-  setter?: (val: any) => void;
+  setter?: ((val: number) => void) | React.Dispatch<React.SetStateAction<string>>;
 }
 
 const AUDIO_NOTE_DURATION_MS = 30000;
+type SpeechRecognitionResultEvent = {
+  results?: ArrayLike<ArrayLike<{ transcript?: string }>>;
+};
+type SpeechRecognitionCtor = new () => {
+  continuous: boolean;
+  interimResults: boolean;
+  maxAlternatives: number;
+  lang: string;
+  onresult: ((event: SpeechRecognitionResultEvent) => void) | null;
+  onerror: ((event: unknown) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+type BrowserWindowWithSpeech = Window & {
+  SpeechRecognition?: SpeechRecognitionCtor;
+  webkitSpeechRecognition?: SpeechRecognitionCtor;
+};
 
 const AppGuideAssistant: React.FC<AppGuideAssistantProps> = ({
   setMood, setEnergyLevel, setSportLevel, setSleepQuality,
@@ -51,7 +69,7 @@ const AppGuideAssistant: React.FC<AppGuideAssistantProps> = ({
   const [progress, setProgress] = useState(0);
   const [audioCountdown, setAudioCountdown] = useState<number | null>(null);
 
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<InstanceType<SpeechRecognitionCtor> | null>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
   const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
 
@@ -81,7 +99,8 @@ const AppGuideAssistant: React.FC<AppGuideAssistantProps> = ({
     }
 
     if (typeof window !== 'undefined') {
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const speechWindow = window as BrowserWindowWithSpeech;
+      const SpeechRecognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
       if (SpeechRecognition) {
         const recognition = new SpeechRecognition();
         recognition.continuous = false;
@@ -210,14 +229,14 @@ const AppGuideAssistant: React.FC<AppGuideAssistantProps> = ({
         }
       }, 8000);
 
-      recognitionRef.current.onresult = (event: any) => {
+      recognitionRef.current.onresult = (event: SpeechRecognitionResultEvent) => {
         if (event.results && event.results[0] && event.results[0][0]) {
           finalResult = event.results[0][0].transcript;
           hasResult = true;
         }
       };
 
-      recognitionRef.current.onerror = (e: any) => {
+      recognitionRef.current.onerror = (e: unknown) => {
         console.warn("Recognition Error", e);
       };
 
@@ -341,6 +360,8 @@ const AppGuideAssistant: React.FC<AppGuideAssistantProps> = ({
       });
     }
 
+    const promptText = p as Record<string, string | undefined>;
+
     // El diario textual se omite en el flujo por voz: la nota de audio del
     // día cubre la reflexión. Si el usuario no tiene grabación disponible
     // (sin handlers de audio), caemos al dictado de texto como fallback.
@@ -354,8 +375,8 @@ const AppGuideAssistant: React.FC<AppGuideAssistantProps> = ({
         type: 'AUDIO_NOTE',
         label: 'Nota de voz',
         question: hasAudioNote
-          ? ((p as any).audioNoteSkipped || 'A voice note already exists.')
-          : ((p as any).audioNoteIntro || 'Record your voice note now.')
+          ? (promptText.audioNoteSkipped || 'A voice note already exists.')
+          : (promptText.audioNoteIntro || 'Record your voice note now.')
       });
     }
 
@@ -385,7 +406,7 @@ const AppGuideAssistant: React.FC<AppGuideAssistantProps> = ({
         await recordAudioNote();
         if (!activeRef.current) break;
         setStatus('SUCCESS');
-        setFeedback((p as any).audioNoteSaved || 'Voice note saved.');
+        setFeedback(promptText.audioNoteSaved || 'Voice note saved.');
         await new Promise(r => setTimeout(r, 800));
         continue;
       }
@@ -404,8 +425,8 @@ const AppGuideAssistant: React.FC<AppGuideAssistantProps> = ({
       if (step.type === 'METRIC' && step.setter) {
         const val = parseNumberInput(answer);
         if (val !== null) {
-          step.setter(val);
-          setFeedback(`${(p as any).registered || 'Registered'}: ${val}`);
+          (step.setter as (val: number) => void)(val);
+          setFeedback(`${promptText.registered || 'Registered'}: ${val}`);
           valueRegistered = true;
         }
       } else if (step.type === 'GOAL' && onUpdateGoal && typeof step.id === 'number') {
@@ -419,7 +440,7 @@ const AppGuideAssistant: React.FC<AppGuideAssistantProps> = ({
         if (answer.length > 3) {
           const isNo = parseBooleanInput(answer) === false;
           if (!isNo) {
-            step.setter((prev: string) => prev ? `${prev} ${answer}` : answer);
+            (step.setter as React.Dispatch<React.SetStateAction<string>>)((prev: string) => prev ? `${prev} ${answer}` : answer);
             setFeedback('Nota guardada');
             valueRegistered = true;
           }

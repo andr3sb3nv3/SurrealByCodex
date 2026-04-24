@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   ArrowLeft, BarChart2, ChevronDown, Sparkles, Loader2, Database,
-  Smile, Zap, Users, Flame, Brain, Scale, Moon, TrendingUp, MessageSquare, Dumbbell, EyeOff, LogOut, AlertCircle, Play, Pause, Check, Bot, Lightbulb, Quote, Target, X, FileText, Calendar, History, Activity
+  Smile, Zap, Users, Flame, Brain, Scale, Moon, TrendingUp, MessageSquare, Dumbbell, EyeOff, LogOut, AlertCircle, Play, Pause, Check, Bot, Lightbulb, Quote, Target, X, FileText, Calendar, History, Activity, Trash2
 } from 'lucide-react';
 import { AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip, BarChart, Bar, ResponsiveContainer } from 'recharts';
 import { getDocs, collection, doc, getDoc } from 'firebase/firestore';
@@ -12,7 +12,7 @@ import Card from '../components/ui/Card';
 import HistoricalMetricView from '../components/HistoricalMetricView';
 import { getMonthName, formatDateFriendly } from '../utils/dateUtils';
 import { DashboardProps, DailyLog } from '../types';
-import { seedDemoUsers } from '../utils/seedDemoData';
+import { seedDemoUsers, clearTargetedDemoUserData } from '../utils/seedDemoData';
 import { TRANSLATIONS } from '../translations';
 import Toast from '../components/ui/Toast';
 import { useToast } from '../utils/useToast';
@@ -23,12 +23,24 @@ interface AICoachResponse {
   quote: string;
 }
 
+type BaseMetricField =
+  | 'estado_animo'
+  | 'nivel_energia'
+  | 'nivel_deporte'
+  | 'calidad_sueno'
+  | 'social_confort'
+  | 'nivel_motivacion'
+  | 'nivel_concentracion'
+  | 'regulacion_emocional';
+
+type DashboardDataPoint = DailyLog & Record<string, string | number | undefined>;
+
 const PersonalDevDashboard: React.FC<DashboardProps> = ({
   onBack, user, authUser, onNavigateToComments, onNavigateToClinicalMetrics, onAuthRequest, onNavigateToProfile,
   language, onToggleLanguage, isPro, onTogglePro, theme,
   readOnly, viewingFriendName, onExitSharedView, onLogout
 }) => {
-  const [rawData, setRawData] = useState<DailyLog[]>([]);
+  const [rawData, setRawData] = useState<DashboardDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [populating, setPopulating] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
@@ -149,18 +161,18 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
     try {
       if(!db) throw new Error("No db");
       const snapshot = await getDocs(collection(db, 'users', user.uid, 'daily_logs'));
-      const METRIC_FIELDS: (keyof DailyLog)[] = [
+      const METRIC_FIELDS: BaseMetricField[] = [
         'estado_animo', 'nivel_energia', 'nivel_deporte', 'calidad_sueno',
         'social_confort', 'nivel_motivacion', 'nivel_concentracion', 'regulacion_emocional'
       ];
-      const historyData: DailyLog[] = [];
+      const historyData: DashboardDataPoint[] = [];
       snapshot.forEach(doc => {
-        const log = doc.data() as DailyLog;
+        const log = doc.data() as DashboardDataPoint;
         // Normalizamos legacy 0-100 → 1-10 para que charts y stats sean consistentes.
         for (const f of METRIC_FIELDS) {
           const v = log[f];
           if (typeof v === 'number' && v > 10) {
-            (log as any)[f] = Math.round(v / 10);
+            log[f] = Math.round(v / 10);
           }
         }
         historyData.push(log);
@@ -171,7 +183,7 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
       const clinicalSnapshots = await Promise.all(
         CLINICAL_METRIC_SEEDS.map((metric) => getDocs(collection(db, 'users', user.uid, metric.collectionName)))
       );
-      const rowsByDate = new Map<string, DailyLog>();
+      const rowsByDate = new Map<string, DashboardDataPoint>();
       historyData.forEach((row) => rowsByDate.set(row.fecha, row));
 
       clinicalSnapshots.forEach((snap, idx) => {
@@ -185,7 +197,7 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
           const normalized = Math.max(0, Math.min(10, Math.round(metric.toScale10(raw) * 10) / 10));
           const existing = rowsByDate.get(dateKey);
           if (!existing) return;
-          (existing as any)[metric.key] = normalized;
+          existing[metric.key] = normalized;
         });
       });
 
@@ -223,7 +235,7 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
   const activeMetrics = useMemo(() => {
     return METRIC_CONFIG.filter(metric => {
       // Check Data Existence (Optimization: Avoid showing empty flat lines 0)
-      const hasData = data.some((log: any) => {
+      const hasData = data.some((log) => {
         const val = log[metric.dbField];
         return typeof val === 'number' && !Number.isNaN(val) && val > 0;
       });
@@ -261,13 +273,35 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
     if (readOnly) return;
     if (!user || !db) return;
     setPopulating(true);
-    const result = await seedDemoUsers();
+    const result = await seedDemoUsers(user.uid);
     setPopulating(false);
     if (result.success) {
         showToast(t.dbSeeded, 'success');
         fetchHistory();
     } else {
         showToast("Error: " + result.error, 'error');
+    }
+  };
+
+  const deleteDemoData = async () => {
+    if (readOnly) return;
+    if (!user || !db) return;
+    const isTargetDemo = ['InconsistentStreak2025', 'DemoMetricas1111111111', 'DemoMetricas2222222222'].includes(user.uid);
+    if (!isTargetDemo) {
+      showToast("Este borrado solo aplica a demos 4, 5 y 6.", 'error');
+      return;
+    }
+    const accepted = window.confirm('¿Seguro que quieres borrar todos los datos de este demo? Esta acción no se puede deshacer.');
+    if (!accepted) return;
+
+    setPopulating(true);
+    const result = await clearTargetedDemoUserData(user.uid);
+    setPopulating(false);
+    if (result.success) {
+      showToast("Datos demo eliminados.", 'success');
+      fetchHistory();
+    } else {
+      showToast("Error: " + result.error, 'error');
     }
   };
 
@@ -304,9 +338,9 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
     activeMetrics.forEach(m => {
        let sum = 0;
        let count = 0;
-       data.forEach((curr: any) => {
+       data.forEach((curr) => {
            const raw = curr[m.dbField];
-           if (raw !== undefined && raw !== null) {
+           if (typeof raw === 'number') {
                // Normalizamos datos legacy en 0-100.
                const val = raw > 10 ? raw / 10 : raw;
                sum += val;
@@ -574,9 +608,14 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
             <Activity size={14} /> {t.clinicalMetrics}
           </button>
           {!readOnly && (
-            <button onClick={populateDemoData} disabled={populating} className="flex items-center gap-2 px-3 py-2 bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-600/30 transition text-xs font-medium">
-              {populating ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14}/>} {populating ? t.generating : "Demo"}
-            </button>
+            <>
+              <button onClick={populateDemoData} disabled={populating} className="flex items-center gap-2 px-3 py-2 bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-600/30 transition text-xs font-medium">
+                {populating ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14}/>} {populating ? t.generating : "Demo"}
+              </button>
+              <button onClick={deleteDemoData} disabled={populating} className="flex items-center gap-2 px-3 py-2 bg-rose-50 dark:bg-rose-600/20 text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-500/30 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-600/30 transition text-xs font-medium">
+                {populating ? <Loader2 size={14} className="animate-spin"/> : <Trash2 size={14}/>} Borrar demo
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -587,7 +626,10 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
             <Database size={48} className="mx-auto mb-4 opacity-50"/>
             <p>{permissionError ? "No tienes permisos para ver estos datos." : t.noData}</p>
             {!readOnly && (
-                <button onClick={populateDemoData} className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition">{t.generateDemo}</button>
+              <div className="mt-4 flex items-center justify-center gap-3">
+                <button onClick={populateDemoData} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition">{t.generateDemo}</button>
+                <button onClick={deleteDemoData} className="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-500 transition">Borrar demo</button>
+              </div>
             )}
           </div>
         ) : (
