@@ -17,6 +17,7 @@ import { auth, functions } from '../services/firebase';
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialIsLogin?: boolean;
 }
 
 // Dominio interno para mapear "usuario" → email sintético en Firebase Auth.
@@ -33,7 +34,7 @@ const getErrorCode = (err: unknown): string | undefined => (
 
 type AuthMode = 'username' | 'email';
 
-const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
+const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialIsLogin = true }) => {
   const [authMode, setAuthMode] = useState<AuthMode>('username');
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
@@ -49,13 +50,14 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
   useEffect(() => {
     if (isOpen) {
+      setIsLogin(initialIsLogin);
       setError(null);
       setRecoveryMessage(null);
       setLoading(false);
       setPassword('');
       setShowRecoveryBox(false);
     }
-  }, [isOpen]);
+  }, [isOpen, initialIsLogin]);
 
   if (!isOpen) return null;
 
