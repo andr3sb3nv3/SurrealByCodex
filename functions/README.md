@@ -1,14 +1,14 @@
 # Firebase Cloud Functions
 
-Esta carpeta agrega la función callable `requestPasswordRecovery` para recuperar contraseñas de cuentas anónimas basadas en `username@user.local`.
+Esta carpeta agrega la función callable `requestPasswordRecovery` para recuperar contraseñas usando únicamente email.
 
 ## Qué hace
 
-1. Recibe `username` y `recoveryEmail`.
-2. Busca el usuario real en Firebase Auth (`username@user.local`).
-3. Valida que el email recibido coincida con `users/{uid}/user_settings/preferences.recoveryEmail` (o `users/{uid}.recoveryEmail`).
+1. Recibe `recoveryEmail`.
+2. Busca coincidencia en `users/{uid}.recoveryEmail` para cuentas de usuario anónimo.
+3. Si no hay coincidencia, intenta recuperar cuenta por el mismo email en Firebase Auth.
 4. Genera un link de restablecimiento de Firebase Auth.
-5. Envía ese link al `recoveryEmail` usando SMTP.
+5. Envía ese link al email recibido usando SMTP.
 
 ## Configuración de secretos
 
@@ -45,7 +45,6 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const fn = httpsCallable(getFunctions(undefined, 'us-central1'), 'requestPasswordRecovery');
 await fn({
-  username: 'mi_usuario',
   recoveryEmail: 'mi@email.com'
 });
 ```

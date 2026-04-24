@@ -39,6 +39,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [recoveryEmail, setRecoveryEmail] = useState('');
   const [sendingRecovery, setSendingRecovery] = useState(false);
   const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
+  const [showRecoveryBox, setShowRecoveryBox] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -109,14 +110,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   };
 
   const handleForgotPassword = async () => {
-    if (authMode !== 'username') {
-      setError('La recuperación de contraseña aplica al modo usuario.');
-      return;
-    }
-    if (!USERNAME_REGEX.test(username)) {
-      setError('Ingresá tu nombre de usuario para recuperar la contraseña.');
-      return;
-    }
+    // Recuperación por email únicamente (sin pedir username).
     if (!EMAIL_REGEX.test(recoveryEmail)) {
       setError('Ingresá un email de recuperación válido.');
       return;
@@ -129,7 +123,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     try {
       const requestPasswordRecovery = httpsCallable(functions, 'requestPasswordRecovery');
       const result = await requestPasswordRecovery({
-        username: username.trim().toLowerCase(),
         recoveryEmail: recoveryEmail.trim().toLowerCase(),
       });
       const data = result.data as { message?: string };
