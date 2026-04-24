@@ -62,6 +62,17 @@ const THEMES: { code: Theme; icon: React.ComponentType<{ size?: number; classNam
 ];
 
 const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAuthRequest, onNavigateToProfile, language, onToggleLanguage, theme, onSetTheme, isPro, onTogglePro, onViewSharedProfile, onShowRules, onNavigateToYearPixels, onLogout }) => {
+  const COLLECTIONS = {
+    users: 'users',
+    dailyLogs: 'daily_logs',
+    outgoing: 'outgoing_connections',
+    incoming: 'incoming_connections',
+    preferences: 'user_settings',
+    preferencesDoc: 'preferences',
+    publicEmails: 'public_emails',
+    pendingInvites: 'pending_invites',
+  } as const;
+
   const [avatar, setAvatar] = useState<string | null>(user?.photoURL || null);
   const [isUploading, setIsUploading] = useState(false);
   const { toast, showToast, clearToast } = useToast();
