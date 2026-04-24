@@ -43,7 +43,8 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
 }) => {
   const [rawData, setRawData] = useState<DashboardDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
-  const [populating, setPopulating] = useState(false); 
+  const [isGeneratingDemo, setIsGeneratingDemo] = useState(false);
+  const [isDeletingDemo, setIsDeletingDemo] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
   const [permissionError, setPermissionError] = useState(false);
@@ -343,15 +344,17 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
   const populateDemoData = async () => {
     if (readOnly) return;
     if (!user || !db) return;
+    if (isGeneratingDemo || isDeletingDemo) return;
     const targetUid = demoConfig.targetUid;
     if (!demoUserOptions.some((option) => option.uid === targetUid)) {
       showToast('Selecciona un usuario demo válido.', 'error');
       return;
     }
-    setPopulating(true);
+    setIsGeneratingDemo(true);
+    showToast('Generando datos demo. Esto puede tardar unos segundos…', 'warning');
     const { targetUid: _ignored, ...seedConfig } = demoConfig;
     const result = await seedDemoUsers(targetUid, seedConfig);
-    setPopulating(false);
+    setIsGeneratingDemo(false);
     if (result.success) {
         showToast(`Demo generado con éxito (${targetUid}).`, 'success');
         setShowDemoModal(false);
@@ -364,6 +367,7 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
   const deleteDemoData = async () => {
     if (readOnly) return;
     if (!user || !db) return;
+    if (isGeneratingDemo || isDeletingDemo) return;
     const isTargetDemo = ['InconsistentStreak2025', 'DemoMetricas1111111111', 'DemoMetricas2222222222'].includes(user.uid);
     if (!isTargetDemo) {
       showToast("Este borrado solo aplica a demos 4, 5 y 6.", 'error');
@@ -372,9 +376,9 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
     const accepted = window.confirm('¿Seguro que quieres borrar todos los datos de este demo? Esta acción no se puede deshacer.');
     if (!accepted) return;
 
-    setPopulating(true);
+    setIsDeletingDemo(true);
     const result = await clearTargetedDemoUserData(user.uid);
-    setPopulating(false);
+    setIsDeletingDemo(false);
     if (result.success) {
       showToast("Datos demo eliminados.", 'success');
       fetchHistory();
@@ -605,8 +609,8 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
             </div>
             <div className="mt-6 flex justify-end gap-3">
               <button onClick={() => setShowDemoModal(false)} className="px-4 py-2 rounded border border-slate-300 dark:border-slate-600">Cancelar</button>
-              <button onClick={populateDemoData} disabled={populating} className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-60">
-                {populating ? 'Generando...' : 'Generar'}
+              <button onClick={populateDemoData} disabled={isGeneratingDemo || isDeletingDemo} className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-60">
+                {isGeneratingDemo ? 'Generando...' : 'Generar'}
               </button>
             </div>
           </div>
@@ -766,11 +770,11 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
           </button>
           {!readOnly && (
             <>
-              <button onClick={() => setShowDemoModal(true)} disabled={populating} className="flex items-center gap-2 px-3 py-2 bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-600/30 transition text-xs font-medium">
-                {populating ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14}/>} {populating ? t.generating : "Demo"}
+              <button onClick={() => setShowDemoModal(true)} disabled={isGeneratingDemo || isDeletingDemo} className="flex items-center gap-2 px-3 py-2 bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-600/30 transition text-xs font-medium">
+                {isGeneratingDemo ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14}/>} {isGeneratingDemo ? t.generating : "Demo"}
               </button>
-              <button onClick={deleteDemoData} disabled={populating} className="flex items-center gap-2 px-3 py-2 bg-rose-50 dark:bg-rose-600/20 text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-500/30 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-600/30 transition text-xs font-medium">
-                {populating ? <Loader2 size={14} className="animate-spin"/> : <Trash2 size={14}/>} Borrar demo
+              <button onClick={deleteDemoData} disabled={isGeneratingDemo || isDeletingDemo} className="flex items-center gap-2 px-3 py-2 bg-rose-50 dark:bg-rose-600/20 text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-500/30 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-600/30 transition text-xs font-medium">
+                {isDeletingDemo ? <Loader2 size={14} className="animate-spin"/> : <Trash2 size={14}/>} Borrar demo
               </button>
             </>
           )}
