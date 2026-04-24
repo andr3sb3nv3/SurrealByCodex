@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, AlertCircle, Loader2, User as UserIcon, Mail, Lock, ArrowRight, Sparkles, LogIn, AtSign, VenetianMask } from 'lucide-react';
+import { X, AlertCircle, Loader2, User as UserIcon, Mail, Lock, ArrowRight, Sparkles, LogIn, AtSign, VenetianMask, Send } from 'lucide-react';
 import {
   signInWithEmailAndPassword,
   linkWithCredential,
@@ -11,7 +11,8 @@ import {
   signInWithRedirect,
   EmailAuthProvider
 } from 'firebase/auth';
-import { auth } from '../services/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { auth, functions } from '../services/firebase';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -22,6 +23,7 @@ interface AuthModalProps {
 // El usuario nunca lo ve.
 const ANON_EMAIL_DOMAIN = 'user.local';
 const USERNAME_REGEX = /^[a-zA-Z0-9._-]{3,30}$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const usernameToEmail = (u: string) => `${u.trim().toLowerCase()}@${ANON_EMAIL_DOMAIN}`;
 
 type AuthMode = 'username' | 'email';
@@ -34,13 +36,19 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [sendingRecovery, setSendingRecovery] = useState(false);
+  const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
+  const [showRecoveryBox, setShowRecoveryBox] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       setError(null);
+      setRecoveryMessage(null);
       setLoading(false);
       setPassword('');
+      setShowRecoveryBox(false);
     }
   }, [isOpen]);
 
@@ -98,6 +106,35 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       setError(msg);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!EMAIL_REGEX.test(recoveryEmail)) {
+      setError('Ingresá un email de recuperación válido.');
+      return;
+    }
+
+    setSendingRecovery(true);
+    setError(null);
+    setRecoveryMessage(null);
+
+    try {
+      const requestPasswordRecovery = httpsCallable(functions, 'requestPasswordRecovery');
+      const result = await requestPasswordRecovery({
+        recoveryEmail: recoveryEmail.trim().toLowerCase(),
+      });
+      const data = result.data as { message?: string };
+      setRecoveryMessage(data?.message || 'Te enviamos un email para restablecer tu contraseña.');
+    } catch (err: any) {
+      const code = err?.code as string | undefined;
+      if (code?.includes('not-found') || code?.includes('permission-denied')) {
+        setError('No existe una cuenta con esos datos.');
+      } else {
+        setError('No pudimos enviar el email de recuperación. Intentá de nuevo.');
+      }
+    } finally {
+      setSendingRecovery(false);
     }
   };
 
@@ -223,7 +260,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                 <VenetianMask size={14} /> Ingreso anónimo con usuario y contraseña
               </p>
               <p className="text-indigo-800/80">
-                Sin email, sin teléfono, sin datos personales. Elegí un usuario y una contraseña. <b>Si olvidás la contraseña no se puede recuperar.</b>
+                Sin email de login ni teléfono. Elegí un usuario y una contraseña. Después te pediremos un email de recuperación para casos de olvido.
               </p>
             </div>
           )}
@@ -325,6 +362,45 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               )}
             </button>
           </form>
+
+          {isLogin && (
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={() => setShowRecoveryBox((prev) => !prev)}
+                className="text-xs text-indigo-600 hover:text-indigo-700 underline underline-offset-2 font-semibold"
+              >
+                Olvidé mi contraseña
+              </button>
+
+              {showRecoveryBox && (
+                <div className="mt-3 p-3 rounded-xl border border-slate-200 bg-slate-50 space-y-3">
+                  <div className="relative">
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <input
+                      type="email"
+                      value={recoveryEmail}
+                      onChange={(e) => setRecoveryEmail(e.target.value)}
+                      placeholder="Tu email"
+                      className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleForgotPassword}
+                    disabled={sendingRecovery}
+                    className="w-full py-2.5 rounded-xl text-sm font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+                  >
+                    {sendingRecovery ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                    Enviar correo de recuperación
+                  </button>
+                  {recoveryMessage && (
+                    <p className="text-xs text-emerald-700 font-medium">{recoveryMessage}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Social Logins */}
           <div className="my-8 flex items-center gap-4">
