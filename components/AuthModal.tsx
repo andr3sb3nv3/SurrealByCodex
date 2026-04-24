@@ -196,12 +196,12 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300 overflow-y-auto">
       <div
-        className="bg-white text-slate-900 rounded-[32px] shadow-2xl max-w-md w-full overflow-hidden relative animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 flex flex-col my-auto max-h-[calc(100vh-2rem)]"
+        className="bg-white text-slate-900 rounded-[28px] shadow-2xl max-w-md w-full overflow-hidden relative animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 flex flex-col my-auto max-h-[calc(100vh-1rem)]"
         onClick={(e) => e.stopPropagation()}
       >
 
         {/* Decorative Header */}
-        <div className={`relative px-8 pt-12 pb-8 text-white transition-colors duration-500 ${isLogin ? 'bg-gradient-to-br from-indigo-600 to-violet-600' : 'bg-gradient-to-br from-slate-800 to-slate-900'}`}>
+        <div className={`relative px-6 pt-8 pb-6 text-white transition-colors duration-500 ${isLogin ? 'bg-gradient-to-br from-indigo-600 to-violet-600' : 'bg-gradient-to-br from-slate-800 to-slate-900'}`}>
            <button
             onClick={onClose}
             className="absolute top-4 right-4 z-10 p-2 bg-white/10 text-white rounded-full hover:bg-white/20 transition-colors backdrop-blur-sm"
@@ -217,15 +217,15 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
            <h2 className="text-3xl font-bold tracking-tight mb-2">
              {isLogin ? 'Bienvenido' : 'Crear Cuenta'}
            </h2>
-           <p className="text-indigo-100/80 text-sm font-medium leading-relaxed max-w-xs">
-              {isLogin
-                ? 'Ingresa para sincronizar tus metas, diario y progreso en la nube.'
-                : 'Únete para comenzar tu viaje de crecimiento personal.'}
-           </p>
+           {!isLogin && (
+             <p className="text-indigo-100/80 text-sm font-medium leading-relaxed max-w-xs">
+                Únete para comenzar tu viaje de crecimiento personal.
+             </p>
+           )}
         </div>
 
         {/* Form Body */}
-        <div className="p-8 bg-white flex-1 overflow-y-auto">
+        <div className="p-6 bg-white flex-1 overflow-y-auto">
 
           {/* Auth Mode Tabs */}
           <div className="flex gap-1 p-1 bg-slate-100 rounded-2xl mb-4">
@@ -364,48 +364,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             </button>
           </form>
 
-          {isLogin && (
-            <div className="mt-3">
-              <button
-                type="button"
-                onClick={() => setShowRecoveryBox((prev) => !prev)}
-                className="text-xs text-indigo-600 hover:text-indigo-700 underline underline-offset-2 font-semibold inline-flex items-center gap-1"
-              >
-                <LifeBuoy size={12} />
-                Olvidé mi contraseña
-              </button>
-
-              {showRecoveryBox && (
-                <div className="mt-3 p-3 rounded-xl border border-slate-200 bg-slate-50 space-y-3">
-                  <div className="relative">
-                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    <input
-                      type="email"
-                      value={recoveryEmail}
-                      onChange={(e) => setRecoveryEmail(e.target.value)}
-                      placeholder="Tu email"
-                      className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleForgotPassword}
-                    disabled={sendingRecovery}
-                    className="w-full py-2.5 rounded-xl text-sm font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
-                  >
-                    {sendingRecovery ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                    Enviar correo de recuperación
-                  </button>
-                  {recoveryMessage && (
-                    <p className="text-xs text-emerald-700 font-medium">{recoveryMessage}</p>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Social Logins */}
-          <div className="my-8 flex items-center gap-4">
+          <div className="my-6 flex items-center gap-4">
             <div className="h-px bg-slate-100 flex-1"></div>
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">O continúa con</span>
             <div className="h-px bg-slate-100 flex-1"></div>
@@ -426,7 +386,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             Google
           </button>
 
-          <div className="mt-8 text-center">
+          <div className="mt-6 text-center">
             <p className="text-sm text-slate-500 font-medium">
               {isLogin ? "¿Nuevo aquí? " : "¿Ya tienes cuenta? "}
               <button
@@ -436,6 +396,45 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                 {isLogin ? "Regístrate gratis" : "Inicia sesión"}
               </button>
             </p>
+            {isLogin && (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowRecoveryBox((prev) => !prev)}
+                  className="text-xs text-indigo-600 hover:text-indigo-700 underline underline-offset-2 font-semibold inline-flex items-center gap-1"
+                >
+                  <LifeBuoy size={12} />
+                  Olvidé mi contraseña
+                </button>
+
+                {showRecoveryBox && (
+                  <div className="mt-3 p-3 rounded-xl border border-slate-200 bg-slate-50 space-y-3 text-left">
+                    <div className="relative">
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                      <input
+                        type="email"
+                        value={recoveryEmail}
+                        onChange={(e) => setRecoveryEmail(e.target.value)}
+                        placeholder="Tu email"
+                        className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleForgotPassword}
+                      disabled={sendingRecovery}
+                      className="w-full py-2.5 rounded-xl text-sm font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+                    >
+                      {sendingRecovery ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                      Enviar correo de recuperación
+                    </button>
+                    {recoveryMessage && (
+                      <p className="text-xs text-emerald-700 font-medium">{recoveryMessage}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
