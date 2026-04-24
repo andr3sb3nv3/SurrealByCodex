@@ -110,6 +110,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   };
 
   const handleForgotPassword = async () => {
+    // Recuperación por email únicamente (sin pedir username).
     if (!EMAIL_REGEX.test(recoveryEmail)) {
       setError('Ingresá un email de recuperación válido.');
       return;
