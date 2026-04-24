@@ -12,7 +12,7 @@ import Card from '../components/ui/Card';
 import HistoricalMetricView from '../components/HistoricalMetricView';
 import { getMonthName, formatDateFriendly } from '../utils/dateUtils';
 import { DashboardProps, DailyLog } from '../types';
-import { seedDemoUsers } from '../utils/seedDemoData';
+import { seedDemoUsers, clearTargetedDemoUserData } from '../utils/seedDemoData';
 import { TRANSLATIONS } from '../translations';
 import Toast from '../components/ui/Toast';
 import { useToast } from '../utils/useToast';
@@ -42,7 +42,6 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
 }) => {
   const [rawData, setRawData] = useState<DashboardDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
-  const [populating, setPopulating] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
   const [permissionError, setPermissionError] = useState(false);
@@ -295,7 +294,10 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
     if (!accepted) return;
 
     setPopulating(true);
+<<<<<<< codex/fix-user-data-display-in-dashboard-j0arl7
     const { clearTargetedDemoUserData } = await import('../utils/seedDemoData');
+=======
+>>>>>>> main
     const result = await clearTargetedDemoUserData(user.uid);
     setPopulating(false);
     if (result.success) {

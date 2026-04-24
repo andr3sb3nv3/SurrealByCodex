@@ -1,5 +1,11 @@
+<<<<<<< codex/fix-user-data-display-in-dashboard-j0arl7
 import { writeBatch, doc, getDoc, getDocs, collection } from 'firebase/firestore';
 import type { DocumentReference } from 'firebase/firestore';
+=======
+import { writeBatch, doc, getDoc } from 'firebase/firestore';
+import type { DocumentReference } from 'firebase/firestore';
+import { writeBatch, doc, getDoc, DocumentReference } from 'firebase/firestore';
+>>>>>>> main
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth } from '../services/firebase';
 import { DailyLog } from '../types';
@@ -138,7 +144,11 @@ export const seedDemoUsers = async (targetUid?: string): Promise<{success: boole
   }
 
   // Nuevo flujo focalizado por demo (botón "Generar demo" sobre el usuario actual).
+<<<<<<< codex/fix-user-data-display-in-dashboard-j0arl7
   if (targetUid && TARGETED_DEMO_UIDS.includes(targetUid as typeof TARGETED_DEMO_UIDS[number])) {
+=======
+  if (targetUid && [DEMO_4_UID, DEMO_5_UID, DEMO_6_UID].includes(targetUid)) {
+>>>>>>> main
     try {
       const goalsData = {
         updatedAt: Date.now(),
@@ -214,7 +224,11 @@ export const seedDemoUsers = async (targetUid?: string): Promise<{success: boole
         const log = generateRandomLog(dateStr, targetUid !== DEMO_5_UID);
         const goalsProgress = buildThreeGoals();
         log.reflexion = maybeReflection();
+<<<<<<< codex/fix-user-data-display-in-dashboard-j0arl7
         delete (log as DailyLog & { audio_note?: string }).audio_note;
+=======
+        log.audio_note = undefined;
+>>>>>>> main
         log.objetivos_completados = goalsProgress.objetivos_completados;
         log.objetivos_pendientes = goalsProgress.objetivos_pendientes;
         log.progreso_porcentaje = Math.round((goalsProgress.completed / 3) * 100);
@@ -563,6 +577,7 @@ export const seedDemoUsers = async (targetUid?: string): Promise<{success: boole
       ? String((error as { message?: string }).message)
       : 'unknown';
     return { success: false, error: message };
+<<<<<<< codex/fix-user-data-display-in-dashboard-j0arl7
   }
 };
 
@@ -634,8 +649,11 @@ export const clearTargetedDemoUserData = async (targetUid: string): Promise<{suc
       ? String((error as { message?: string }).message)
       : 'unknown';
     return { success: false, error: message };
+=======
+>>>>>>> main
   }
 };
+
 // -------------------------------------------------------------------------
 // Generadores por módulo clínico para Demo 5. Cada uno devuelve un doc para
 // un día específico. `recent` ∈ [0, 1] (0 = hace ~1 año, 1 = hoy) permite
