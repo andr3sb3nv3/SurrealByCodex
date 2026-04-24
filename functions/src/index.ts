@@ -14,7 +14,9 @@ const mailUser = defineSecret('MAIL_USER');
 const mailPass = defineSecret('MAIL_PASS');
 const mailFrom = defineSecret('MAIL_FROM');
 
+const USERNAME_REGEX = /^[a-zA-Z0-9._-]{3,30}$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const USERNAME_DOMAIN = 'user.local';
 
 interface RecoverPasswordInput {
   username?: string;
@@ -22,10 +24,8 @@ interface RecoverPasswordInput {
   continueUrl?: string;
 }
 
-const USERNAME_REGEX = /^[a-zA-Z0-9._-]{3,30}$/;
-const USERNAME_DOMAIN = 'user.local';
-const normalizeEmail = (value: string) => value.trim().toLowerCase();
 const normalizeUsername = (value: string) => value.trim().toLowerCase();
+const normalizeEmail = (value: string) => value.trim().toLowerCase();
 
 const buildResetEmailHtml = (username: string, resetLink: string) => `
   <div style="font-family:Arial,sans-serif;line-height:1.5;color:#111827;max-width:560px;margin:auto;">
@@ -38,6 +38,27 @@ const buildResetEmailHtml = (username: string, resetLink: string) => `
   </div>
 `;
 
+const getStoredRecoveryEmail = async (uid: string): Promise<string | null> => {
+  const db = getFirestore();
+
+  const [prefsSnap, userSnap] = await Promise.all([
+    db.doc(`users/${uid}/user_settings/preferences`).get(),
+    db.doc(`users/${uid}`).get(),
+  ]);
+
+  const fromPrefs = prefsSnap.get('recoveryEmail');
+  if (typeof fromPrefs === 'string' && EMAIL_REGEX.test(fromPrefs.trim())) {
+    return normalizeEmail(fromPrefs);
+  }
+
+  const fromUser = userSnap.get('recoveryEmail');
+  if (typeof fromUser === 'string' && EMAIL_REGEX.test(fromUser.trim())) {
+    return normalizeEmail(fromUser);
+  }
+
+  return null;
+};
+
 export const requestPasswordRecovery = onCall(
   {
     region: 'us-central1',
@@ -46,55 +67,31 @@ export const requestPasswordRecovery = onCall(
   async (request) => {
     const { username, recoveryEmail, continueUrl } = (request.data ?? {}) as RecoverPasswordInput;
 
+    if (!username || !USERNAME_REGEX.test(username)) {
+      throw new HttpsError('invalid-argument', 'El usuario no es válido.');
+    }
+
     if (!recoveryEmail || !EMAIL_REGEX.test(recoveryEmail)) {
       throw new HttpsError('invalid-argument', 'El email de recuperación no es válido.');
     }
 
+    const normalizedUsername = normalizeUsername(username);
     const normalizedRecoveryEmail = normalizeEmail(recoveryEmail);
-    const normalizedUsername = username && USERNAME_REGEX.test(username)
-      ? normalizeUsername(username)
-      : null;
-    const usersSnap = await getFirestore()
-      .collection('users')
-      .where('recoveryEmail', '==', normalizedRecoveryEmail)
-      .limit(1)
-      .get();
+    const authEmail = `${normalizedUsername}@${USERNAME_DOMAIN}`;
 
-    let accountEmail: string | null = null;
-
-    if (normalizedUsername) {
-      try {
-        const userByUsername = await getAuth().getUserByEmail(`${normalizedUsername}@${USERNAME_DOMAIN}`);
-        accountEmail = userByUsername.email ?? null;
-      } catch {
-        accountEmail = null;
-      }
+    let userRecord;
+    try {
+      userRecord = await getAuth().getUserByEmail(authEmail);
+    } catch {
+      throw new HttpsError('not-found', 'No existe un usuario con esos datos.');
     }
 
-    if (!usersSnap.empty) {
-      const uid = usersSnap.docs[0].id;
-      try {
-        const userByUid = await getAuth().getUser(uid);
-        accountEmail = userByUid.email ?? null;
-      } catch {
-        accountEmail = null;
-      }
+    const savedRecoveryEmail = await getStoredRecoveryEmail(userRecord.uid);
+    if (!savedRecoveryEmail || savedRecoveryEmail !== normalizedRecoveryEmail) {
+      throw new HttpsError('permission-denied', 'No existe un usuario con esos datos.');
     }
 
-    if (!accountEmail) {
-      try {
-        const userByEmail = await getAuth().getUserByEmail(normalizedRecoveryEmail);
-        accountEmail = userByEmail.email ?? null;
-      } catch {
-        accountEmail = null;
-      }
-    }
-
-    if (!accountEmail) {
-      throw new HttpsError('not-found', 'No existe una cuenta con ese email.');
-    }
-
-    const resetLink = await getAuth().generatePasswordResetLink(accountEmail, continueUrl ? { url: continueUrl } : undefined);
+    const resetLink = await getAuth().generatePasswordResetLink(authEmail, continueUrl ? { url: continueUrl } : undefined);
 
     const transporter = nodemailer.createTransport({
       host: mailHost.value(),
@@ -110,7 +107,7 @@ export const requestPasswordRecovery = onCall(
       from: mailFrom.value(),
       to: normalizedRecoveryEmail,
       subject: 'Recuperación de contraseña - Surreal Horizons',
-      html: buildResetEmailHtml(normalizedRecoveryEmail, resetLink),
+      html: buildResetEmailHtml(normalizedUsername, resetLink),
     });
 
     return {
