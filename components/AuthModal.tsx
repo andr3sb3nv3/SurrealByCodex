@@ -39,7 +39,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [recoveryEmail, setRecoveryEmail] = useState('');
   const [sendingRecovery, setSendingRecovery] = useState(false);
   const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
-  const [showRecoveryBox, setShowRecoveryBox] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -110,7 +109,14 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   };
 
   const handleForgotPassword = async () => {
-    // Recuperación por email únicamente (sin pedir username).
+    if (authMode !== 'username') {
+      setError('La recuperación de contraseña aplica al modo usuario.');
+      return;
+    }
+    if (!USERNAME_REGEX.test(username)) {
+      setError('Ingresá tu nombre de usuario para recuperar la contraseña.');
+      return;
+    }
     if (!EMAIL_REGEX.test(recoveryEmail)) {
       setError('Ingresá un email de recuperación válido.');
       return;
@@ -123,6 +129,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     try {
       const requestPasswordRecovery = httpsCallable(functions, 'requestPasswordRecovery');
       const result = await requestPasswordRecovery({
+        username: username.trim().toLowerCase(),
         recoveryEmail: recoveryEmail.trim().toLowerCase(),
       });
       const data = result.data as { message?: string };
@@ -362,6 +369,36 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                 </>
               )}
             </button>
+
+            {isLogin && authMode === 'username' && (
+              <div className="mt-2 p-3 rounded-xl border border-slate-200 bg-slate-50 space-y-3">
+                <p className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
+                  <LifeBuoy size={14} /> Olvidé contraseña
+                </p>
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <input
+                    type="email"
+                    value={recoveryEmail}
+                    onChange={(e) => setRecoveryEmail(e.target.value)}
+                    placeholder="Email de recuperación"
+                    className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  disabled={sendingRecovery}
+                  className="w-full py-2.5 rounded-xl text-sm font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  {sendingRecovery ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                  Enviar recuperación
+                </button>
+                {recoveryMessage && (
+                  <p className="text-xs text-emerald-700 font-medium">{recoveryMessage}</p>
+                )}
+              </div>
+            )}
           </form>
 
           {/* Social Logins */}
