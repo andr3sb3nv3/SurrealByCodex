@@ -613,6 +613,7 @@ export default function App() {
       )}
       {view === 'dashboard' && (
         <PersonalDevDashboard
+           key={`dashboard-${activeUser?.uid ?? 'none'}`}
            onBack={() => sharedUserViewing ? handleExitSharedView() : setView('canvas')}
            user={activeUser}
            authUser={currentRealUser}
@@ -634,6 +635,7 @@ export default function App() {
       )}
       {view === 'clinical' && (
         <ClinicalDashboard
+           key={`clinical-${activeUser?.uid ?? 'none'}`}
            onBack={() => setView('dashboard')}
            user={activeUser}
            authUser={currentRealUser}
@@ -672,6 +674,7 @@ export default function App() {
       )}
       {view === 'profile' && activeUser && (
         <UserProfile
+           key={`profile-${activeUser.uid}`}
            onBack={() => setView('canvas')}
            user={activeUser}
            authUser={currentRealUser}
