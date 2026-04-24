@@ -14,8 +14,8 @@ interface Props {
 const STR: Record<'es' | 'en', {
   title: string;
   subtitle: string;
-  nameLabel: string;
-  namePlaceholder: string;
+  usernameLabel: string;
+  usernamePlaceholder: string;
   emailLabel: string;
   emailPlaceholder: string;
   emailHint: string;
@@ -32,39 +32,39 @@ const STR: Record<'es' | 'en', {
 }> = {
   es: {
     title: '¡Bienvenido a Surreal Horizons!',
-    subtitle: 'Tu profesional ya creó tu cuenta. Contanos quién sos para que podamos cuidar mejor tu información.',
-    nameLabel: 'Tu nombre',
-    namePlaceholder: 'Ej. Ana Morales',
+    subtitle: 'Primer paso antes de tus métricas: confirmá tu nombre de usuario y cargá un email de recuperación.',
+    usernameLabel: 'Nombre de usuario',
+    usernamePlaceholder: 'Ej. ana_2025',
     emailLabel: 'Email de recuperación',
     emailPlaceholder: 'ana@ejemplo.com',
     emailHint: 'Sólo lo usaremos para recuperar tu contraseña si la olvidás. Nunca enviaremos promociones.',
     save: 'Guardar y continuar',
     saving: 'Guardando...',
-    nameRequired: 'Tu nombre es obligatorio.',
+    nameRequired: 'Tu nombre de usuario es obligatorio.',
     emailRequired: 'El email es obligatorio.',
     emailInvalid: 'El email no parece válido.',
     errorGeneric: 'No se pudo guardar. Intentá de nuevo.',
     whyTitle: 'Por qué te pedimos esto',
-    whyBullet1: 'Para que tu profesional pueda identificarte por nombre.',
+    whyBullet1: 'Para identificar tu cuenta con el nombre de usuario correcto.',
     whyBullet2: 'Para poder recuperar tu contraseña si la olvidás.',
     whyBullet3: 'Tu username y tu código clínico siguen siendo anónimos.',
   },
   en: {
     title: 'Welcome to Surreal Horizons!',
-    subtitle: "Your clinician already created your account. Tell us who you are so we can take better care of your information.",
-    nameLabel: 'Your name',
-    namePlaceholder: 'e.g. Ana Morales',
+    subtitle: 'First step before choosing metrics: confirm your username and add a recovery email.',
+    usernameLabel: 'Username',
+    usernamePlaceholder: 'e.g. ana_2025',
     emailLabel: 'Recovery email',
     emailPlaceholder: 'ana@example.com',
     emailHint: "We'll only use it to recover your password if you forget. No marketing, ever.",
     save: 'Save and continue',
     saving: 'Saving...',
-    nameRequired: 'Your name is required.',
+    nameRequired: 'Your username is required.',
     emailRequired: 'Email is required.',
     emailInvalid: 'Email does not look valid.',
     errorGeneric: 'Could not save. Please try again.',
     whyTitle: 'Why we ask',
-    whyBullet1: 'So your clinician can identify you by name.',
+    whyBullet1: 'To identify your account by your username.',
     whyBullet2: 'So you can recover your password if forgotten.',
     whyBullet3: 'Your username and clinical code remain anonymous.',
   },
@@ -73,27 +73,28 @@ const STR: Record<'es' | 'en', {
 const pickLang = (language: Language): 'es' | 'en' => (language === 'es' ? 'es' : 'en');
 
 const EMAIL_RX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const USERNAME_RX = /^[a-zA-Z0-9._-]{3,30}$/;
 
 const ProfileCompletion: React.FC<Props> = ({ user, language, onComplete }) => {
   const t = STR[pickLang(language)];
-  const [name, setName] = useState(user.displayName ?? '');
+  const [username, setUsername] = useState(user.displayName ?? '');
   const [email, setEmail] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSave = async () => {
     setError(null);
-    const trimmedName = name.trim();
+    const trimmedName = username.trim();
     const trimmedEmail = email.trim().toLowerCase();
 
-    if (!trimmedName) { setError(t.nameRequired); return; }
+    if (!trimmedName || !USERNAME_RX.test(trimmedName)) { setError(t.nameRequired); return; }
     if (!trimmedEmail) { setError(t.emailRequired); return; }
     if (!EMAIL_RX.test(trimmedEmail)) { setError(t.emailInvalid); return; }
     if (!db) { setError(t.errorGeneric); return; }
 
     setSaving(true);
     try {
-      // Firebase Auth profile: displayName visible en toda la app.
+      // El displayName del perfil queda alineado al username elegido.
       await updateProfile(user, { displayName: trimmedName });
 
       // Firestore: metadata para el psiquiatra + recovery email.
@@ -111,7 +112,7 @@ const ProfileCompletion: React.FC<Props> = ({ user, language, onComplete }) => {
         doc(db, 'users', user.uid, 'user_settings', 'preferences'),
         {
           recoveryEmail: trimmedEmail,
-          realName: trimmedName,
+          username: trimmedName,
           profileCompletedAt: Date.now(),
           updatedAt: Date.now(),
         },
@@ -144,7 +145,7 @@ const ProfileCompletion: React.FC<Props> = ({ user, language, onComplete }) => {
         <div className="p-8 space-y-5">
           <div className="space-y-1.5 group">
             <label className="text-xs font-bold text-slate-500 ml-1 uppercase tracking-wider group-focus-within:text-indigo-600 transition-colors">
-              {t.nameLabel}
+              {t.usernameLabel}
             </label>
             <div className="relative">
               <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={20} />
@@ -152,10 +153,10 @@ const ProfileCompletion: React.FC<Props> = ({ user, language, onComplete }) => {
                 type="text"
                 required
                 autoFocus
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-400"
-                placeholder={t.namePlaceholder}
+                placeholder={t.usernamePlaceholder}
               />
             </div>
           </div>

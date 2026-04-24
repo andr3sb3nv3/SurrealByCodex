@@ -78,6 +78,33 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
 
   const t = TRANSLATIONS[language];
 
+  type ClinicalMetricSeed = {
+    key: string;
+    collectionName: string;
+    sourceField: string;
+    toScale10: (value: number) => number;
+    labelEs: string;
+    labelEn: string;
+    color: string;
+    tailwindText: string;
+    tailwindBg: string;
+    tailwindBorder: string;
+    gradId: string;
+  };
+
+  const CLINICAL_METRIC_SEEDS: ClinicalMetricSeed[] = useMemo(() => ([
+    { key: 'clin_anxiety', collectionName: 'deepClinicalLogsAnxiety', sourceField: 'generalAnxiety', toScale10: (v) => v > 10 ? v / 10 : v, labelEs: 'Ansiedad', labelEn: 'Anxiety', color: '#f97316', tailwindText: 'text-orange-500', tailwindBg: 'bg-orange-500/10', tailwindBorder: 'border-orange-500/50', gradId: 'cClinAnxiety' },
+    { key: 'clin_depression', collectionName: 'deepClinicalLogsDepression', sourceField: 'moodIntensity', toScale10: (v) => v, labelEs: 'Depresión', labelEn: 'Depression', color: '#0ea5e9', tailwindText: 'text-sky-500', tailwindBg: 'bg-sky-500/10', tailwindBorder: 'border-sky-500/50', gradId: 'cClinDepression' },
+    { key: 'clin_bipolar', collectionName: 'deepClinicalLogsBipolar', sourceField: 'globalMood', toScale10: (v) => v + 5, labelEs: 'Bipolar', labelEn: 'Bipolar', color: '#8b5cf6', tailwindText: 'text-violet-500', tailwindBg: 'bg-violet-500/10', tailwindBorder: 'border-violet-500/50', gradId: 'cClinBipolar' },
+    { key: 'clin_ocd', collectionName: 'deepClinicalLogsOCD', sourceField: 'obsessionIntensity', toScale10: (v) => v > 10 ? v / 10 : v, labelEs: 'TOC', labelEn: 'OCD', color: '#10b981', tailwindText: 'text-emerald-500', tailwindBg: 'bg-emerald-500/10', tailwindBorder: 'border-emerald-500/50', gradId: 'cClinOCD' },
+    { key: 'clin_trauma', collectionName: 'deepClinicalLogsTrauma', sourceField: 'hypervigilanceLevel', toScale10: (v) => v, labelEs: 'Trauma', labelEn: 'Trauma', color: '#64748b', tailwindText: 'text-slate-500', tailwindBg: 'bg-slate-500/10', tailwindBorder: 'border-slate-500/50', gradId: 'cClinTrauma' },
+    { key: 'clin_sleep', collectionName: 'deepClinicalLogsSleep', sourceField: 'sleepQuality', toScale10: (v) => v * 2, labelEs: 'Sueño Clínico', labelEn: 'Clinical Sleep', color: '#6366f1', tailwindText: 'text-indigo-500', tailwindBg: 'bg-indigo-500/10', tailwindBorder: 'border-indigo-500/50', gradId: 'cClinSleep' },
+    { key: 'clin_personality', collectionName: 'deepClinicalLogsPersonality', sourceField: 'emotionalStability', toScale10: (v) => v, labelEs: 'Personalidad', labelEn: 'Personality', color: '#e11d48', tailwindText: 'text-rose-500', tailwindBg: 'bg-rose-500/10', tailwindBorder: 'border-rose-500/50', gradId: 'cClinPersonality' },
+    { key: 'clin_adhd', collectionName: 'deepClinicalLogsADHD', sourceField: 'focusLevel', toScale10: (v) => v, labelEs: 'TDAH', labelEn: 'ADHD', color: '#eab308', tailwindText: 'text-yellow-500', tailwindBg: 'bg-yellow-500/10', tailwindBorder: 'border-yellow-500/50', gradId: 'cClinADHD' },
+    { key: 'clin_substance', collectionName: 'deepClinicalLogsSubstance', sourceField: 'cravingIntensity', toScale10: (v) => v, labelEs: 'Consumo', labelEn: 'Substance', color: '#f59e0b', tailwindText: 'text-amber-500', tailwindBg: 'bg-amber-500/10', tailwindBorder: 'border-amber-500/50', gradId: 'cClinSubstance' },
+    { key: 'clin_psychotic', collectionName: 'deepClinicalLogsSchizophrenia', sourceField: 'stressLevel', toScale10: (v) => v * 2, labelEs: 'Psicótico', labelEn: 'Psychotic', color: '#a855f7', tailwindText: 'text-purple-500', tailwindBg: 'bg-purple-500/10', tailwindBorder: 'border-purple-500/50', gradId: 'cClinPsychotic' },
+  ]), []);
+
   // CONFIGURATION MAPPING
   const METRIC_CONFIG = useMemo(() => [
     { key: 'mood', dbField: 'estado_animo', label: t.stats.mood, icon: Smile, color: '#f472b6', tailwindText: 'text-pink-500', tailwindBg: 'bg-pink-500/10', tailwindBorder: 'border-pink-500/50', gradId: 'cMood' },
@@ -88,7 +115,18 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
     { key: 'focus', dbField: 'nivel_concentracion', label: t.stats.focus, icon: Brain, color: '#a78bfa', tailwindText: 'text-violet-500', tailwindBg: 'bg-violet-500/10', tailwindBorder: 'border-violet-500/50', gradId: 'cConc' },
     { key: 'emotional', dbField: 'regulacion_emocional', label: t.stats.reg, icon: Scale, color: '#38bdf8', tailwindText: 'text-sky-500', tailwindBg: 'bg-sky-500/10', tailwindBorder: 'border-sky-500/50', gradId: 'cReg' },
     { key: 'sleep', dbField: 'calidad_sueno', label: t.stats.sleep, icon: Moon, color: '#818cf8', tailwindText: 'text-indigo-500', tailwindBg: 'bg-indigo-500/10', tailwindBorder: 'border-indigo-500/50', gradId: 'cSleep' },
-  ], [t]);
+    ...CLINICAL_METRIC_SEEDS.map(metric => ({
+      key: metric.key,
+      dbField: metric.key,
+      label: language === 'es' ? metric.labelEs : metric.labelEn,
+      icon: Activity,
+      color: metric.color,
+      tailwindText: metric.tailwindText,
+      tailwindBg: metric.tailwindBg,
+      tailwindBorder: metric.tailwindBorder,
+      gradId: metric.gradId,
+    })),
+  ], [t, CLINICAL_METRIC_SEEDS, language]);
 
   // Cleanup audio on unmount
   useEffect(() => {
@@ -127,10 +165,35 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
         }
         historyData.push(log);
       });
-      historyData.sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
-      setRawData(historyData);
+
+      // Merge clinical metrics by date into dashboard logs so they can be
+      // overlaid in the same chart with mood/energy/etc.
+      const clinicalSnapshots = await Promise.all(
+        CLINICAL_METRIC_SEEDS.map((metric) => getDocs(collection(db, 'users', user.uid, metric.collectionName)))
+      );
+      const rowsByDate = new Map<string, DailyLog>();
+      historyData.forEach((row) => rowsByDate.set(row.fecha, row));
+
+      clinicalSnapshots.forEach((snap, idx) => {
+        const metric = CLINICAL_METRIC_SEEDS[idx];
+        snap.forEach((clinicalDoc) => {
+          const entry = clinicalDoc.data() as Record<string, unknown>;
+          const dateKey = (entry.dateKey as string | undefined) || clinicalDoc.id;
+          const raw = entry[metric.sourceField];
+          if (typeof dateKey !== 'string' || typeof raw !== 'number') return;
+
+          const normalized = Math.max(0, Math.min(10, Math.round(metric.toScale10(raw) * 10) / 10));
+          const existing = rowsByDate.get(dateKey);
+          if (!existing) return;
+          (existing as any)[metric.key] = normalized;
+        });
+      });
+
+      const mergedData = Array.from(rowsByDate.values());
+      mergedData.sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+      setRawData(mergedData);
       
-      const months = [...new Set(historyData.map(d => getMonthName(d.fecha, language)))];
+      const months = [...new Set(mergedData.map(d => getMonthName(d.fecha, language)))];
       setAvailableMonths(months);
       
       if (months.length > 0) {
@@ -148,7 +211,7 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
     }
   };
 
-  useEffect(() => { if (user) fetchHistory(); }, [user, language]); 
+  useEffect(() => { if (user) fetchHistory(); }, [user, language, CLINICAL_METRIC_SEEDS]); 
 
   // Filter Data by Month
   const data = useMemo(() => {
@@ -162,7 +225,7 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
       // Check Data Existence (Optimization: Avoid showing empty flat lines 0)
       const hasData = data.some((log: any) => {
         const val = log[metric.dbField];
-        return val !== undefined && val !== null;
+        return typeof val === 'number' && !Number.isNaN(val) && val > 0;
       });
       return hasData;
     });
