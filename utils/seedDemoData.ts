@@ -14,6 +14,7 @@ const DEMO_5_UID = 'DemoMetricas1111111111';
 // Demo 6: también termina en 10 dígitos distintos de cero para activar
 // los 10 módulos clínicos y mantener paridad con Demo 5.
 const DEMO_6_UID = 'DemoMetricas2222222222';
+const TARGETED_DEMO_UIDS = [DEMO_4_UID, DEMO_5_UID, DEMO_6_UID] as const;
 
 const DEMO_1_META = {
   uid: DEMO_1_UID,
