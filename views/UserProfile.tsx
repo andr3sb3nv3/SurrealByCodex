@@ -377,6 +377,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBack, user, authUser, onAut
                 // NOT FOUND (New User / Not Logged In) -> Create Pending Invitation
                 try {
                   // Using addDoc allows Firestore to generate a safe ID, avoiding character issues with emails
+                  await createPendingInvite();
                   await addDoc(collection(db, COLLECTIONS.pendingInvites), {
                     toEmail: normalizedEmail,
                     fromUid: user.uid,

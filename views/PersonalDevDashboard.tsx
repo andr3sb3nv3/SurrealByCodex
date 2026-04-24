@@ -294,6 +294,10 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
     if (!accepted) return;
 
     setPopulating(true);
+<<<<<<< codex/fix-user-data-display-in-dashboard-j0arl7
+    const { clearTargetedDemoUserData } = await import('../utils/seedDemoData');
+=======
+>>>>>>> main
     const result = await clearTargetedDemoUserData(user.uid);
     setPopulating(false);
     if (result.success) {

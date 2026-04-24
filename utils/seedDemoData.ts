@@ -1,6 +1,11 @@
+<<<<<<< codex/fix-user-data-display-in-dashboard-j0arl7
+import { writeBatch, doc, getDoc, getDocs, collection } from 'firebase/firestore';
+import type { DocumentReference } from 'firebase/firestore';
+=======
 import { writeBatch, doc, getDoc } from 'firebase/firestore';
 import type { DocumentReference } from 'firebase/firestore';
 import { writeBatch, doc, getDoc, DocumentReference } from 'firebase/firestore';
+>>>>>>> main
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth } from '../services/firebase';
 import { DailyLog } from '../types';
@@ -139,7 +144,11 @@ export const seedDemoUsers = async (targetUid?: string): Promise<{success: boole
   }
 
   // Nuevo flujo focalizado por demo (botón "Generar demo" sobre el usuario actual).
+<<<<<<< codex/fix-user-data-display-in-dashboard-j0arl7
+  if (targetUid && TARGETED_DEMO_UIDS.includes(targetUid as typeof TARGETED_DEMO_UIDS[number])) {
+=======
   if (targetUid && [DEMO_4_UID, DEMO_5_UID, DEMO_6_UID].includes(targetUid)) {
+>>>>>>> main
     try {
       const goalsData = {
         updatedAt: Date.now(),
@@ -215,7 +224,11 @@ export const seedDemoUsers = async (targetUid?: string): Promise<{success: boole
         const log = generateRandomLog(dateStr, targetUid !== DEMO_5_UID);
         const goalsProgress = buildThreeGoals();
         log.reflexion = maybeReflection();
+<<<<<<< codex/fix-user-data-display-in-dashboard-j0arl7
+        delete (log as DailyLog & { audio_note?: string }).audio_note;
+=======
         log.audio_note = undefined;
+>>>>>>> main
         log.objetivos_completados = goalsProgress.objetivos_completados;
         log.objetivos_pendientes = goalsProgress.objetivos_pendientes;
         log.progreso_porcentaje = Math.round((goalsProgress.completed / 3) * 100);
@@ -564,6 +577,80 @@ export const seedDemoUsers = async (targetUid?: string): Promise<{success: boole
       ? String((error as { message?: string }).message)
       : 'unknown';
     return { success: false, error: message };
+<<<<<<< codex/fix-user-data-display-in-dashboard-j0arl7
+  }
+};
+
+export const clearTargetedDemoUserData = async (targetUid: string): Promise<{success: boolean, error?: string}> => {
+  if (!db || !auth) {
+    return { success: false, error: "Database not initialized" };
+  }
+
+  if (!TARGETED_DEMO_UIDS.includes(targetUid as typeof TARGETED_DEMO_UIDS[number])) {
+    return { success: false, error: "invalid-demo-target" };
+  }
+
+  if (!auth.currentUser) {
+    try {
+      await signInAnonymously(auth);
+    } catch (e) {
+      console.warn("Could not sign in anonymously:", e);
+    }
+  }
+
+  const collectionsToClear = [
+    'daily_logs',
+    'Set_goals',
+    'deepClinicalLogsAnxiety',
+    'deepClinicalLogsDepression',
+    'deepClinicalLogsBipolar',
+    'deepClinicalLogsSchizophrenia',
+    'deepClinicalLogsOCD',
+    'deepClinicalLogsTrauma',
+    'deepClinicalLogsSleep',
+    'deepClinicalLogsPersonality',
+    'deepClinicalLogsADHD',
+    'deepClinicalLogsSubstance',
+  ] as const;
+
+  try {
+    let batch = writeBatch(db);
+    let opCount = 0;
+    const commitAndResetBatch = async () => {
+      if (opCount > 0) {
+        await batch.commit();
+        batch = writeBatch(db);
+        opCount = 0;
+      }
+    };
+
+    const addDeleteToBatch = async (ref: DocumentReference) => {
+      batch.delete(ref);
+      opCount++;
+      if (opCount >= 450) await commitAndResetBatch();
+    };
+
+    for (const col of collectionsToClear) {
+      const snap = await getDocs(collection(db, 'users', targetUid, col));
+      for (const row of snap.docs) {
+        await addDeleteToBatch(row.ref as DocumentReference);
+      }
+    }
+
+    await addDeleteToBatch(doc(db, 'users', targetUid) as DocumentReference);
+    await commitAndResetBatch();
+    return { success: true };
+  } catch (error: unknown) {
+    const code = typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code?: string }).code)
+      : '';
+    if (code === 'permission-denied') return { success: false, error: 'permission-denied' };
+    const message = typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message?: string }).message)
+      : 'unknown';
+    return { success: false, error: message };
+=======
+>>>>>>> main
   }
 };
 
