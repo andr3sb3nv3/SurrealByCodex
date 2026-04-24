@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Zap, Clock, Brain, CheckCircle2, MessageSquare, AlertCircle, ListChecks, Loader2 } from 'lucide-react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
+import { MODULE_COLLECTIONS } from './shared';
 import { PatologiaModuleProps } from '../../utils/patologiaModules';
 import { Language } from '../../types';
 
@@ -96,7 +97,7 @@ const ADHDTracker: React.FC<PatologiaModuleProps> = ({ userId, dateKey, readOnly
       if (!db || !userId) { setStatus('idle'); return; }
       try {
         setStatus('loading');
-        const ref = doc(db, 'users', userId, 'deepClinicalLogsADHD', dateKey);
+        const ref = doc(db, MODULE_COLLECTIONS.users, userId, MODULE_COLLECTIONS.adhd, dateKey);
         const snap = await getDoc(ref);
         if (cancelled) return;
         if (snap.exists()) {
@@ -119,7 +120,7 @@ const ADHDTracker: React.FC<PatologiaModuleProps> = ({ userId, dateKey, readOnly
     setStatus('saving');
     setErrorMsg(null);
     try {
-      const ref = doc(db, 'users', userId, 'deepClinicalLogsADHD', dateKey);
+      const ref = doc(db, MODULE_COLLECTIONS.users, userId, MODULE_COLLECTIONS.adhd, dateKey);
       await setDoc(ref, { ...entry, dateKey, updatedAt: Date.now() }, { merge: true });
       setStatus('saved');
       setTimeout(() => setStatus('idle'), 2000);

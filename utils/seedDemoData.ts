@@ -1,4 +1,4 @@
-import { writeBatch, doc, getDoc } from 'firebase/firestore';
+import { writeBatch, doc, getDoc, DocumentReference } from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth } from '../services/firebase';
 import { DailyLog } from '../types';
@@ -151,7 +151,7 @@ export const seedDemoUsers = async (): Promise<{success: boolean, error?: string
         }
     };
 
-    const addToBatch = async (ref: any, data: any) => {
+    const addToBatch = async (ref: DocumentReference, data: object) => {
         batch.set(ref, data);
         opCount++;
         if (opCount >= 450) { // Margen de seguridad antes de 500
@@ -430,13 +430,19 @@ export const seedDemoUsers = async (): Promise<{success: boolean, error?: string
     console.log("Datos generados exitosamente para Demo 1, 2, 3, 4, 5 y 6.");
     return { success: true };
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error al generar datos demo:", error);
     // Return specific error code for UI handling
-    if (error.code === 'permission-denied') {
+    const code = typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code?: string }).code)
+      : '';
+    if (code === 'permission-denied') {
         return { success: false, error: 'permission-denied' };
     }
-    return { success: false, error: error.message };
+    const message = typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message?: string }).message)
+      : 'unknown';
+    return { success: false, error: message };
   }
 };
 // -------------------------------------------------------------------------

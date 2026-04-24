@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { onAuthStateChanged, User, signOut, getRedirectResult } from 'firebase/auth';
+import { onAuthStateChanged, User, signOut, getRedirectResult, IdTokenResult } from 'firebase/auth';
 import { setDoc, doc, collection, query, where, deleteDoc, onSnapshot, getDoc } from 'firebase/firestore';
 import { Loader2, AlertCircle, Copy, Check, Users, ChevronUp, ChevronDown, LogIn, LogOut } from 'lucide-react';
 import { auth, db } from './services/firebase';
@@ -42,7 +42,15 @@ const createDemoUser = ({ uid, displayName, email, creationTime }: DemoUserSeed)
   tenantId: null,
   delete: async () => {},
   getIdToken: async () => '',
-  getIdTokenResult: async () => ({} as any),
+  getIdTokenResult: async () => ({
+    claims: {},
+    token: '',
+    authTime: '',
+    issuedAtTime: '',
+    expirationTime: '',
+    signInProvider: null,
+    signInSecondFactor: null,
+  } as IdTokenResult),
   reload: async () => {},
   toJSON: () => ({}),
 } as unknown as User);
@@ -613,6 +621,7 @@ export default function App() {
       )}
       {view === 'dashboard' && (
         <PersonalDevDashboard
+           key={`dashboard-${activeUser?.uid ?? 'none'}`}
            onBack={() => sharedUserViewing ? handleExitSharedView() : setView('canvas')}
            user={activeUser}
            authUser={currentRealUser}
@@ -634,6 +643,7 @@ export default function App() {
       )}
       {view === 'clinical' && (
         <ClinicalDashboard
+           key={`clinical-${activeUser?.uid ?? 'none'}`}
            onBack={() => setView('dashboard')}
            user={activeUser}
            authUser={currentRealUser}
@@ -672,6 +682,7 @@ export default function App() {
       )}
       {view === 'profile' && activeUser && (
         <UserProfile
+           key={`profile-${activeUser.uid}`}
            onBack={() => setView('canvas')}
            user={activeUser}
            authUser={currentRealUser}

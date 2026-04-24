@@ -120,7 +120,7 @@ const ProfileCompletion: React.FC<Props> = ({ user, language, onComplete }) => {
       );
 
       onComplete();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('ProfileCompletion save error', err);
       setError(t.errorGeneric);
     } finally {
