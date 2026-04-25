@@ -1,7 +1,8 @@
 import { writeBatch, doc, getDoc, getDocs, collection } from 'firebase/firestore';
 import type { DocumentReference } from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
-import { db, auth } from '../services/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, auth, functions } from '../services/firebase';
 import { DailyLog } from '../types';
 import {
   DEFAULT_CLINICAL_METRICS,
@@ -68,6 +69,20 @@ export interface DemoSeedResult {
   endKey?: string;
   daysGenerated?: number;
   targetUid?: string;
+  verifiedDailyLogs?: number;
+  verifiedClinicalLogs?: number;
+  expectedClinicalLogs?: number;
+}
+
+interface CloudSeedDemoDataResponse {
+  ok?: boolean;
+  targetUid?: string;
+  startKey?: string;
+  endKey?: string;
+  expectedDays?: number;
+  verifiedDailyLogs?: number;
+  verifiedClinicalLogs?: number;
+  expectedClinicalLogs?: number;
 }
 
 const removeUndefinedFields = <T>(value: T): T => {
@@ -236,6 +251,57 @@ export const seedDemoUsers = async (
   }
 
   // Nuevo flujo focalizado por demo (botón "Generar demo" sobre el usuario actual).
+  if (targetUid && [DEMO_4_UID, DEMO_5_UID, DEMO_6_UID].includes(targetUid)) {
+    try {
+      const seedDemoData = httpsCallable(functions, 'seedDemoData');
+      const result = await seedDemoData({ targetUid, ...config });
+      const data = result.data as CloudSeedDemoDataResponse;
+
+      if (!data.ok) {
+        return {
+          success: false,
+          error: `Generación incompleta. Daily logs: ${data.verifiedDailyLogs ?? 0}/${data.expectedDays ?? 0}. Clinical logs: ${data.verifiedClinicalLogs ?? 0}/${data.expectedClinicalLogs ?? 0}.`,
+          startKey: data.startKey,
+          endKey: data.endKey,
+          daysGenerated: data.expectedDays,
+          targetUid: data.targetUid ?? targetUid,
+          verifiedDailyLogs: data.verifiedDailyLogs,
+          verifiedClinicalLogs: data.verifiedClinicalLogs,
+          expectedClinicalLogs: data.expectedClinicalLogs,
+        };
+      }
+
+      return {
+        success: true,
+        startKey: data.startKey,
+        endKey: data.endKey,
+        daysGenerated: data.expectedDays,
+        targetUid: data.targetUid ?? targetUid,
+        verifiedDailyLogs: data.verifiedDailyLogs,
+        verifiedClinicalLogs: data.verifiedClinicalLogs,
+        expectedClinicalLogs: data.expectedClinicalLogs,
+      };
+    } catch (error: unknown) {
+      const code = typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: string }).code)
+        : '';
+      const message = typeof error === 'object' && error !== null && 'message' in error
+        ? String((error as { message?: string }).message)
+        : 'unknown';
+      if (code.includes('resource-exhausted')) {
+        return { success: false, error: 'Firebase/Firestore quota excedida. No se pudieron generar datos demo.' };
+      }
+      if (code.includes('permission-denied')) {
+        return { success: false, error: 'Permisos insuficientes para generar datos demo.' };
+      }
+      if (code.includes('not-found') || code.includes('unimplemented')) {
+        console.warn('Cloud Function seedDemoData no está disponible; usando generación legacy desde el cliente.', error);
+      } else {
+        return { success: false, error: message };
+      }
+    }
+  }
+
   if (targetUid && [DEMO_4_UID, DEMO_5_UID, DEMO_6_UID].includes(targetUid)) {
     try {
       const goalsData = {
