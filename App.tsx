@@ -288,6 +288,12 @@ export default function App() {
     }
   }, [demoMode]); 
 
+  useEffect(() => {
+    if (!currentRealUser || demoMode !== 0 || sharedUserViewing || view !== 'landing') return;
+    setView('canvas');
+    setIsAuthModalOpen(false);
+  }, [currentRealUser, demoMode, sharedUserViewing, view]);
+
   // Real-time Pending Invites Listener
   useEffect(() => {
     if (!currentRealUser || !currentRealUser.email || demoMode !== 0 || !db) return;
