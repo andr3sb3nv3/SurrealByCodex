@@ -70,6 +70,7 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
     { uid: 'DemoMetricas1111111111', label: 'Demo 5 · DemoMetricas1111111111' },
     { uid: 'DemoMetricas2222222222', label: 'Demo 6 · DemoMetricas2222222222' },
   ] as const;
+  const activeDemoOption = demoUserOptions.find((option) => option.uid === user?.uid);
   const dailyMetricOptions: Array<{ key: NonNullable<DemoSeedConfig['includeDailyMetrics']>[number]; label: string }> = [
     { key: 'estado_animo', label: 'Estado de ánimo' },
     { key: 'nivel_energia', label: 'Energía' },
@@ -353,18 +354,21 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
     if (readOnly) return;
     if (!user || !db) return;
     if (isGeneratingDemo || isDeletingDemo) return;
-    const targetUid = demoConfig.targetUid;
+    const targetUid = user.uid;
     if (!demoUserOptions.some((option) => option.uid === targetUid)) {
-      showToast('Selecciona un usuario demo válido.', 'error');
+      showToast('La generación demo solo aplica al demo activo 4, 5 o 6.', 'error');
       return;
     }
     setIsGeneratingDemo(true);
-    showToast('Generando datos demo. Esto puede tardar unos segundos…', 'warning');
+    showToast(`Generando datos para ${targetUid}. Esto puede tardar unos segundos…`, 'warning');
     const { targetUid: _ignored, ...seedConfig } = demoConfig;
     const result = await seedDemoUsers(targetUid, seedConfig);
     setIsGeneratingDemo(false);
     if (result.success) {
-        showToast(`Demo generado con éxito (${targetUid}).`, 'success');
+        showToast(
+          `Demo generado (${targetUid}): ${result.startKey} → ${result.endKey}, ${result.daysGenerated} días.`,
+          'success'
+        );
         setShowDemoModal(false);
         fetchHistory();
     } else {
@@ -550,12 +554,15 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
               <button onClick={() => setShowDemoModal(false)} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800"><X size={18} /></button>
             </div>
             <div className="grid md:grid-cols-2 gap-4 text-sm">
-              <label className="flex flex-col gap-1">
+              <div className="flex flex-col gap-1">
                 <span className="font-semibold">Usuario demo</span>
-                <select value={demoConfig.targetUid} onChange={(e) => setDemoConfig(prev => ({ ...prev, targetUid: e.target.value }))} className="px-3 py-2 rounded border bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600">
-                  {demoUserOptions.map((option) => <option key={option.uid} value={option.uid}>{option.label}</option>)}
-                </select>
-              </label>
+                <div className="px-3 py-2 rounded border bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200">
+                  {activeDemoOption?.label ?? 'Solo demos 4, 5 y 6'}
+                </div>
+                <span className="text-xs text-slate-500">
+                  Se regenera únicamente el demo activo que estás viendo.
+                </span>
+              </div>
               <label className="flex flex-col gap-1">
                 <span className="font-semibold">Meses de datos</span>
                 <input type="number" min={1} max={24} value={demoConfig.months ?? 6} onChange={(e) => setDemoConfig(prev => ({ ...prev, months: Number(e.target.value) }))} className="px-3 py-2 rounded border bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600" />
