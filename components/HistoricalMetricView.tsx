@@ -79,9 +79,10 @@ const HistoricalMetricView: React.FC<Props> = ({
       .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
     if (withValues.length === 0) return [];
 
-    const today = new Date();
-    today.setHours(12, 0, 0, 0);
-    const cutoff = new Date(today);
+    // Usamos como referencia la última fecha con datos para mantener consistencia
+    // entre rangos (3 meses ⊂ 6 meses ⊂ 12 meses).
+    const endDate = parseDateKey(withValues[withValues.length - 1].fecha);
+    const cutoff = new Date(endDate);
     cutoff.setMonth(cutoff.getMonth() - range);
 
     return withValues.filter(log => parseDateKey(log.fecha).getTime() >= cutoff.getTime());

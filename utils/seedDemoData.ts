@@ -247,8 +247,8 @@ export const seedDemoUsers = async (
         if (opCount >= 450) await commitAndResetBatch();
       };
 
-      const cfgMonths = toBoundedInt(config.months, 6, 1, 24);
-      const goalsCount = toBoundedInt(config.dailyGoalsCount, 3, 1, 10);
+      const cfgMonths = Math.max(1, Math.min(24, Math.round(config.months ?? 6)));
+      const goalsCount = Math.max(1, Math.min(10, Math.round(config.dailyGoalsCount ?? 3)));
       const selectedDailyMetrics = new Set<DailyMetricKey>((config.includeDailyMetrics?.length ? config.includeDailyMetrics : DEFAULT_DAILY_METRICS));
       const selectedClinicalMetrics = new Set<ClinicalMetricKey>((config.includeClinicalMetrics?.length ? config.includeClinicalMetrics : DEFAULT_CLINICAL_METRICS));
       const consistentAlways = (config.consistency ?? 'inconsistent') === 'always';
