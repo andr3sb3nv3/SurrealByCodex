@@ -209,7 +209,23 @@ export default function App() {
 
   // Auth Listener
   useEffect(() => {
-    if (auth) {
+    if (!auth) {
+        setIsAuthReady(true);
+        return;
+    }
+
+    let authReadyResolved = false;
+    const markAuthReady = () => {
+      authReadyResolved = true;
+      setIsAuthReady(true);
+    };
+    const readyFallback = window.setTimeout(() => {
+      if (authReadyResolved) return;
+      console.warn('Firebase Auth did not resolve initial state in time; continuing without blocking app startup.');
+      markAuthReady();
+    }, 4000);
+
+    try {
         const unsubscribe = onAuthStateChanged(auth, async (u) => {
             setCurrentRealUser(u);
             
@@ -250,17 +266,25 @@ export default function App() {
               if (demoMode === 0) setIsOnboarding(false);
             }
 
-            setIsAuthReady(true);
+            markAuthReady();
 
             // If we are not in demo mode and a real user logs in, close modal
             if (u && demoMode === 0) {
               setIsAuthModalOpen(false);
               setView(prev => prev === 'landing' ? 'canvas' : prev);
             }
+        }, (error) => {
+            console.error('Firebase Auth listener failed:', error);
+            markAuthReady();
         });
-        return () => unsubscribe();
-    } else {
-        setIsAuthReady(true);
+        return () => {
+          window.clearTimeout(readyFallback);
+          unsubscribe();
+        };
+    } catch (error) {
+        console.error('Could not initialize Firebase Auth listener:', error);
+        window.clearTimeout(readyFallback);
+        markAuthReady();
     }
   }, [demoMode]); 
 
