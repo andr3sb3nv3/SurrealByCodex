@@ -1,4 +1,4 @@
-import { writeBatch, doc, getDoc } from 'firebase/firestore';
+import { writeBatch, doc, getDoc, getDocs, collection } from 'firebase/firestore';
 import type { DocumentReference } from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth } from '../services/firebase';
@@ -8,6 +8,7 @@ import {
   persistUserClinicalMetrics,
   type ClinicalMetricKey,
 } from './clinicalMetricsConfig';
+import { formatDateKey, getLastMonthsDateRange, listDateKeysInRange, parseDateKeyLocal } from './dateUtils';
 export { clearTargetedDemoUserData } from './clearDemoData';
 
 // UIDs deben coincidir con los definidos en App.tsx
@@ -22,6 +23,20 @@ const DEMO_5_UID = 'DemoMetricas1111111111';
 // los 10 módulos clínicos y mantener paridad con Demo 5.
 const DEMO_6_UID = 'DemoMetricas2222222222';
 const TARGETED_DEMO_UIDS = [DEMO_4_UID, DEMO_5_UID, DEMO_6_UID] as const;
+const TARGETED_DEMO_COLLECTIONS = [
+  'daily_logs',
+  'Set_goals',
+  'deepClinicalLogsAnxiety',
+  'deepClinicalLogsDepression',
+  'deepClinicalLogsBipolar',
+  'deepClinicalLogsSchizophrenia',
+  'deepClinicalLogsOCD',
+  'deepClinicalLogsTrauma',
+  'deepClinicalLogsSleep',
+  'deepClinicalLogsPersonality',
+  'deepClinicalLogsADHD',
+  'deepClinicalLogsSubstance',
+] as const;
 const DEFAULT_DAILY_METRICS: DailyMetricKey[] = [
   'estado_animo',
   'nivel_energia',
@@ -143,7 +158,7 @@ const REFLECTIONS_DEMO_1 = [
 ];
 
 const generateRandomLog = (dateStr: string, isHighPerformer: boolean): DailyLog => {
-  const isWeekend = new Date(dateStr).getDay() % 6 === 0;
+  const isWeekend = (parseDateKeyLocal(dateStr) ?? new Date(dateStr)).getDay() % 6 === 0;
 
   // Escala 1-10. High performer: 8-9 ±1. Promedio: 5-7 ±2.
   const baseMood = isHighPerformer ? (isWeekend ? 9 : 8) : (isWeekend ? 7 : 6);
@@ -178,7 +193,7 @@ const generateRandomLog = (dateStr: string, isHighPerformer: boolean): DailyLog 
 
   return {
     fecha: dateStr,
-    timestamp: new Date(dateStr).getTime(),
+    timestamp: (parseDateKeyLocal(dateStr) ?? new Date(`${dateStr}T12:00:00`)).getTime(),
     estado_animo: mood,
     nivel_energia: energy,
     nivel_deporte: sport,
@@ -246,6 +261,11 @@ export const seedDemoUsers = async (
         opCount++;
         if (opCount >= 450) await commitAndResetBatch();
       };
+      const addDeleteToBatch = async (ref: DocumentReference) => {
+        batch.delete(ref);
+        opCount++;
+        if (opCount >= 450) await commitAndResetBatch();
+      };
 
       const cfgMonths = Math.max(1, Math.min(24, Math.round(config.months ?? 6)));
       const goalsCount = Math.max(1, Math.min(10, Math.round(config.dailyGoalsCount ?? 3)));
@@ -271,16 +291,16 @@ export const seedDemoUsers = async (
         ? pickOne(REFLECTIONS_DEMO_2)
         : '';
 
-      const omitProbability = consistentAlways ? 0 : 0.35;
-      const today = new Date();
-      today.setHours(12, 0, 0, 0);
-      const startDate = new Date(today);
-      startDate.setMonth(startDate.getMonth() - cfgMonths);
-      const generatedDates: Date[] = [];
-      for (const iter = new Date(startDate); iter <= today; iter.setDate(iter.getDate() + 1)) {
-        generatedDates.push(new Date(iter));
+      const { startDate, endDate } = getLastMonthsDateRange(cfgMonths);
+      const generatedDateKeys = listDateKeysInRange(startDate, endDate);
+      const totalDays = generatedDateKeys.length;
+
+      for (const col of TARGETED_DEMO_COLLECTIONS) {
+        const snap = await getDocs(collection(db, 'users', targetUid, col));
+        for (const row of snap.docs) {
+          await addDeleteToBatch(row.ref as DocumentReference);
+        }
       }
-      const totalDays = generatedDates.length;
 
       await addToBatch(doc(db, 'users', targetUid), {
         uid: targetUid,
@@ -297,17 +317,12 @@ export const seedDemoUsers = async (
       });
       await addToBatch(doc(db, 'users', targetUid, 'Set_goals', 'current'), goalsData);
 
-      for (let idx = 0; idx < generatedDates.length; idx++) {
-        const d = generatedDates[idx];
-        const back = generatedDates.length - idx - 1;
-        const dateStr = d.toISOString().split('T')[0];
-        const recent = generatedDates.length > 1 ? idx / (generatedDates.length - 1) : 1;
+      for (let idx = 0; idx < generatedDateKeys.length; idx++) {
+        const dateStr = generatedDateKeys[idx];
+        const d = parseDateKeyLocal(dateStr) ?? new Date(`${dateStr}T12:00:00`);
+        const back = generatedDateKeys.length - idx - 1;
+        const recent = generatedDateKeys.length > 1 ? idx / (generatedDateKeys.length - 1) : 1;
         const dow = d.getDay();
-
-        // Siempre guardamos el día más reciente para que el histórico
-        // de "últimos X meses" tenga ancla en la fecha actual.
-        const isLatestDay = idx === generatedDates.length - 1;
-        if (!isLatestDay && chance(omitProbability)) continue;
 
         const log = generateRandomLog(dateStr, consistentAlways);
         const goalsProgress = buildGoals();
@@ -418,7 +433,7 @@ export const seedDemoUsers = async (
     for (let i = 0; i < DAYS_TO_GENERATE_SHORT; i++) {
       const d = new Date();
       d.setDate(today.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0];
+      const dateStr = formatDateKey(d);
 
       // Demo 1
       const log1 = generateRandomLog(dateStr, true);
@@ -439,7 +454,7 @@ export const seedDemoUsers = async (
     const iterDate = new Date(start2025);
 
     while (iterDate <= end2025) {
-        const dateStr = iterDate.toISOString().split('T')[0];
+        const dateStr = formatDateKey(iterDate);
 
         // DEMO 3: Racha Perfecta (100% de los días, métricas altas: 9-10)
         const log3 = generateRandomLog(dateStr, true);
@@ -505,7 +520,7 @@ export const seedDemoUsers = async (
     for (let back = 364; back >= 0; back--) {
       const d = new Date(today3);
       d.setDate(today3.getDate() - back);
-      const dateStr = d.toISOString().split('T')[0];
+      const dateStr = formatDateKey(d);
       const recent = 1 - (back / 365); // 0 = hace un año, 1 = hoy
       const dow = d.getDay();
 
@@ -568,7 +583,7 @@ export const seedDemoUsers = async (
 
       const todayX = new Date();
       todayX.setHours(12, 0, 0, 0);
-      const todayKey = todayX.toISOString().split('T')[0];
+      const todayKey = formatDateKey(todayX);
       const [dailyToday, clinicalToday] = await Promise.all([
         getDoc(doc(db, 'users', uid, 'daily_logs', todayKey)),
         getDoc(doc(db, 'users', uid, 'deepClinicalLogsAnxiety', todayKey)),
@@ -583,7 +598,7 @@ export const seedDemoUsers = async (
       for (let back = 364; back >= 0; back--) {
         const d = new Date(todayX);
         d.setDate(todayX.getDate() - back);
-        const dateStr = d.toISOString().split('T')[0];
+        const dateStr = formatDateKey(d);
         const recent = 1 - (back / 365); // 0 = hace un año, 1 = hoy
         const dow = d.getDay(); // 0=Dom
 
