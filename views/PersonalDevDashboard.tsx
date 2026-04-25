@@ -366,7 +366,7 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
     setIsGeneratingDemo(false);
     if (result.success) {
         showToast(
-          `Demo generado (${targetUid}): ${result.startKey} → ${result.endKey}, ${result.daysGenerated} días.`,
+          `Demo generado (${targetUid}): ${result.startKey} → ${result.endKey}. Daily logs ${result.verifiedDailyLogs ?? result.daysGenerated}/${result.daysGenerated}. Clínicos ${result.verifiedClinicalLogs ?? 0}/${result.expectedClinicalLogs ?? 0}.`,
           'success'
         );
         setShowDemoModal(false);
