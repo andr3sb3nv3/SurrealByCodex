@@ -12,10 +12,11 @@ import Card from '../components/ui/Card';
 import HistoricalMetricView from '../components/HistoricalMetricView';
 import { getMonthName, formatDateFriendly } from '../utils/dateUtils';
 import { DashboardProps, DailyLog } from '../types';
-import { seedDemoUsers, clearTargetedDemoUserData } from '../utils/seedDemoData';
+import { seedDemoUsers, clearTargetedDemoUserData, type DemoSeedConfig } from '../utils/seedDemoData';
 import { TRANSLATIONS } from '../translations';
 import Toast from '../components/ui/Toast';
 import { useToast } from '../utils/useToast';
+import { resolveUserClinicalMetrics, type ClinicalMetricKey } from '../utils/clinicalMetricsConfig';
 
 interface AICoachResponse {
   tactics: string[];
@@ -42,13 +43,55 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
 }) => {
   const [rawData, setRawData] = useState<DashboardDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
-  const [populating, setPopulating] = useState(false); 
+  const [isGeneratingDemo, setIsGeneratingDemo] = useState(false);
+  const [isDeletingDemo, setIsDeletingDemo] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
   const [permissionError, setPermissionError] = useState(false);
+  const [showDemoModal, setShowDemoModal] = useState(false);
+  const [configuredClinicalMetrics, setConfiguredClinicalMetrics] = useState<ClinicalMetricKey[]>([]);
+  const [demoConfig, setDemoConfig] = useState<DemoSeedConfig & { targetUid: string }>({
+    targetUid: user?.uid ?? 'InconsistentStreak2025',
+    months: 6,
+    consistency: 'inconsistent',
+    includeDailyMetrics: [
+      'estado_animo', 'nivel_energia', 'nivel_deporte', 'calidad_sueno',
+      'social_confort', 'nivel_motivacion', 'nivel_concentracion', 'regulacion_emocional',
+    ],
+    evolvingMetrics: true,
+    dailyGoalsCount: 3,
+    includeClinicalMetrics: ['depression', 'bipolar', 'anxiety', 'ocd', 'trauma', 'sleep', 'personality', 'adhd', 'schizophrenia', 'substance'],
+  });
   const [historicalOpen, setHistoricalOpen] = useState(false);
   const [historicalInitialKey, setHistoricalInitialKey] = useState<string | undefined>(undefined);
   const { toast, showToast, clearToast } = useToast();
+  const demoUserOptions = [
+    { uid: 'InconsistentStreak2025', label: 'Demo 4 · InconsistentStreak2025' },
+    { uid: 'DemoMetricas1111111111', label: 'Demo 5 · DemoMetricas1111111111' },
+    { uid: 'DemoMetricas2222222222', label: 'Demo 6 · DemoMetricas2222222222' },
+  ] as const;
+  const dailyMetricOptions: Array<{ key: NonNullable<DemoSeedConfig['includeDailyMetrics']>[number]; label: string }> = [
+    { key: 'estado_animo', label: 'Estado de ánimo' },
+    { key: 'nivel_energia', label: 'Energía' },
+    { key: 'nivel_deporte', label: 'Deporte' },
+    { key: 'calidad_sueno', label: 'Sueño' },
+    { key: 'social_confort', label: 'Social' },
+    { key: 'nivel_motivacion', label: 'Motivación' },
+    { key: 'nivel_concentracion', label: 'Concentración' },
+    { key: 'regulacion_emocional', label: 'Regulación emocional' },
+  ];
+  const clinicalMetricOptions: Array<{ key: NonNullable<DemoSeedConfig['includeClinicalMetrics']>[number]; label: string }> = [
+    { key: 'depression', label: 'Depresión' },
+    { key: 'bipolar', label: 'Bipolar' },
+    { key: 'schizophrenia', label: 'Psicótico' },
+    { key: 'substance', label: 'Consumo' },
+    { key: 'anxiety', label: 'Ansiedad' },
+    { key: 'ocd', label: 'TOC' },
+    { key: 'trauma', label: 'Trauma' },
+    { key: 'sleep', label: 'Sueño clínico' },
+    { key: 'personality', label: 'Personalidad' },
+    { key: 'adhd', label: 'TDAH' },
+  ];
   
   // Audio Playback State
   const [activeAudioKey, setActiveAudioKey] = useState<string | null>(null);
@@ -180,14 +223,32 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
 
       // Merge clinical metrics by date into dashboard logs so they can be
       // overlaid in the same chart with mood/energy/etc.
+      const enabledClinical = await resolveUserClinicalMetrics(user.uid, [user.displayName, user.email, user.uid]);
+      setConfiguredClinicalMetrics(enabledClinical);
+      const clinicalMetricByKey: Record<string, ClinicalMetricKey> = {
+        clin_anxiety: 'anxiety',
+        clin_depression: 'depression',
+        clin_bipolar: 'bipolar',
+        clin_psychotic: 'schizophrenia',
+        clin_ocd: 'ocd',
+        clin_trauma: 'trauma',
+        clin_sleep: 'sleep',
+        clin_personality: 'personality',
+        clin_adhd: 'adhd',
+        clin_substance: 'substance',
+      };
+      const filteredClinicalSeeds = CLINICAL_METRIC_SEEDS.filter((metric) => {
+        const mapped = clinicalMetricByKey[metric.key];
+        return mapped ? enabledClinical.includes(mapped) : false;
+      });
       const clinicalSnapshots = await Promise.all(
-        CLINICAL_METRIC_SEEDS.map((metric) => getDocs(collection(db, 'users', user.uid, metric.collectionName)))
+        filteredClinicalSeeds.map((metric) => getDocs(collection(db, 'users', user.uid, metric.collectionName)))
       );
       const rowsByDate = new Map<string, DashboardDataPoint>();
       historyData.forEach((row) => rowsByDate.set(row.fecha, row));
 
       clinicalSnapshots.forEach((snap, idx) => {
-        const metric = CLINICAL_METRIC_SEEDS[idx];
+        const metric = filteredClinicalSeeds[idx];
         snap.forEach((clinicalDoc) => {
           const entry = clinicalDoc.data() as Record<string, unknown>;
           const dateKey = (entry.dateKey as string | undefined) || clinicalDoc.id;
@@ -269,23 +330,44 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
     setVisibleChartKeys(newSet);
   };
 
+  useEffect(() => {
+    if (user && demoUserOptions.some((option) => option.uid === user.uid)) {
+      setDemoConfig((prev) => ({ ...prev, targetUid: user.uid }));
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (configuredClinicalMetrics.length === 0) return;
+    setDemoConfig((prev) => ({ ...prev, includeClinicalMetrics: configuredClinicalMetrics }));
+  }, [configuredClinicalMetrics]);
+
   const populateDemoData = async () => {
     if (readOnly) return;
     if (!user || !db) return;
-    setPopulating(true);
-    const result = await seedDemoUsers(user.uid);
-    setPopulating(false);
+    if (isGeneratingDemo || isDeletingDemo) return;
+    const targetUid = demoConfig.targetUid;
+    if (!demoUserOptions.some((option) => option.uid === targetUid)) {
+      showToast('Selecciona un usuario demo válido.', 'error');
+      return;
+    }
+    setIsGeneratingDemo(true);
+    showToast('Generando datos demo. Esto puede tardar unos segundos…', 'warning');
+    const { targetUid: _ignored, ...seedConfig } = demoConfig;
+    const result = await seedDemoUsers(targetUid, seedConfig);
+    setIsGeneratingDemo(false);
     if (result.success) {
-        showToast(t.dbSeeded, 'success');
+        showToast(`Demo generado con éxito (${targetUid}).`, 'success');
+        setShowDemoModal(false);
         fetchHistory();
     } else {
-        showToast("Error: " + result.error, 'error');
+        showToast("Error al generar demo: " + result.error, 'error');
     }
   };
 
   const deleteDemoData = async () => {
     if (readOnly) return;
     if (!user || !db) return;
+    if (isGeneratingDemo || isDeletingDemo) return;
     const isTargetDemo = ['InconsistentStreak2025', 'DemoMetricas1111111111', 'DemoMetricas2222222222'].includes(user.uid);
     if (!isTargetDemo) {
       showToast("Este borrado solo aplica a demos 4, 5 y 6.", 'error');
@@ -294,9 +376,9 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
     const accepted = window.confirm('¿Seguro que quieres borrar todos los datos de este demo? Esta acción no se puede deshacer.');
     if (!accepted) return;
 
-    setPopulating(true);
+    setIsDeletingDemo(true);
     const result = await clearTargetedDemoUserData(user.uid);
-    setPopulating(false);
+    setIsDeletingDemo(false);
     if (result.success) {
       showToast("Datos demo eliminados.", 'success');
       fetchHistory();
@@ -455,6 +537,85 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-sans pb-10 transition-colors duration-300">
       {toast && <Toast message={toast.message} type={toast.type} onClose={clearToast} />}
+      {showDemoModal && (
+        <div className="fixed inset-0 bg-black/50 z-[110] flex items-center justify-center p-4">
+          <div className="w-full max-w-3xl bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-5 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Generar datos demo</h3>
+              <button onClick={() => setShowDemoModal(false)} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800"><X size={18} /></button>
+            </div>
+            <div className="grid md:grid-cols-2 gap-4 text-sm">
+              <label className="flex flex-col gap-1">
+                <span className="font-semibold">Usuario demo</span>
+                <select value={demoConfig.targetUid} onChange={(e) => setDemoConfig(prev => ({ ...prev, targetUid: e.target.value }))} className="px-3 py-2 rounded border bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600">
+                  {demoUserOptions.map((option) => <option key={option.uid} value={option.uid}>{option.label}</option>)}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="font-semibold">Meses de datos</span>
+                <input type="number" min={1} max={24} value={demoConfig.months ?? 6} onChange={(e) => setDemoConfig(prev => ({ ...prev, months: Number(e.target.value) }))} className="px-3 py-2 rounded border bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600" />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="font-semibold">Consistencia</span>
+                <select value={demoConfig.consistency ?? 'inconsistent'} onChange={(e) => setDemoConfig(prev => ({ ...prev, consistency: e.target.value as DemoSeedConfig['consistency'] }))} className="px-3 py-2 rounded border bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600">
+                  <option value="inconsistent">Con inconsistencias</option>
+                  <option value="always">Cumplió siempre</option>
+                </select>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="font-semibold">Objetivos diarios</span>
+                <input type="number" min={1} max={10} value={demoConfig.dailyGoalsCount ?? 3} onChange={(e) => setDemoConfig(prev => ({ ...prev, dailyGoalsCount: Number(e.target.value) }))} className="px-3 py-2 rounded border bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600" />
+              </label>
+              <label className="flex items-center gap-2 md:col-span-2">
+                <input type="checkbox" checked={Boolean(demoConfig.evolvingMetrics)} onChange={(e) => setDemoConfig(prev => ({ ...prev, evolvingMetrics: e.target.checked }))} />
+                <span className="font-semibold">Las métricas cambian/editan en el tiempo</span>
+              </label>
+              <div className="md:col-span-2">
+                <p className="font-semibold mb-2">Métricas diarias incluidas</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {dailyMetricOptions.map((metric) => {
+                    const checked = demoConfig.includeDailyMetrics?.includes(metric.key) ?? false;
+                    return (
+                      <label key={metric.key} className="flex items-center gap-2">
+                        <input type="checkbox" checked={checked} onChange={(e) => setDemoConfig(prev => {
+                          const curr = new Set(prev.includeDailyMetrics ?? []);
+                          if (e.target.checked) curr.add(metric.key); else curr.delete(metric.key);
+                          return { ...prev, includeDailyMetrics: Array.from(curr) };
+                        })} />
+                        <span>{metric.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="md:col-span-2">
+                <p className="font-semibold mb-2">Métricas clínicas incluidas</p>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                  {clinicalMetricOptions.map((metric) => {
+                    const checked = demoConfig.includeClinicalMetrics?.includes(metric.key) ?? false;
+                    return (
+                      <label key={metric.key} className="flex items-center gap-2">
+                        <input type="checkbox" checked={checked} onChange={(e) => setDemoConfig(prev => {
+                          const curr = new Set(prev.includeClinicalMetrics ?? []);
+                          if (e.target.checked) curr.add(metric.key); else curr.delete(metric.key);
+                          return { ...prev, includeClinicalMetrics: Array.from(curr) };
+                        })} />
+                        <span>{metric.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button onClick={() => setShowDemoModal(false)} className="px-4 py-2 rounded border border-slate-300 dark:border-slate-600">Cancelar</button>
+              <button onClick={populateDemoData} disabled={isGeneratingDemo || isDeletingDemo} className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-60">
+                {isGeneratingDemo ? 'Generando...' : 'Generar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <CompanyHeader onAuthClick={onAuthRequest} user={authUser} onProfileClick={onNavigateToProfile} language={language} onToggleLanguage={onToggleLanguage} isPro={isPro} onLogout={onLogout} />
 
       {/* AI Coach Analysis Overlay - REPORT STYLE */}
@@ -609,11 +770,11 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
           </button>
           {!readOnly && (
             <>
-              <button onClick={populateDemoData} disabled={populating} className="flex items-center gap-2 px-3 py-2 bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-600/30 transition text-xs font-medium">
-                {populating ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14}/>} {populating ? t.generating : "Demo"}
+              <button onClick={() => setShowDemoModal(true)} disabled={isGeneratingDemo || isDeletingDemo} className="flex items-center gap-2 px-3 py-2 bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-600/30 transition text-xs font-medium">
+                {isGeneratingDemo ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14}/>} {isGeneratingDemo ? t.generating : "Demo"}
               </button>
-              <button onClick={deleteDemoData} disabled={populating} className="flex items-center gap-2 px-3 py-2 bg-rose-50 dark:bg-rose-600/20 text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-500/30 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-600/30 transition text-xs font-medium">
-                {populating ? <Loader2 size={14} className="animate-spin"/> : <Trash2 size={14}/>} Borrar demo
+              <button onClick={deleteDemoData} disabled={isGeneratingDemo || isDeletingDemo} className="flex items-center gap-2 px-3 py-2 bg-rose-50 dark:bg-rose-600/20 text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-500/30 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-600/30 transition text-xs font-medium">
+                {isDeletingDemo ? <Loader2 size={14} className="animate-spin"/> : <Trash2 size={14}/>} Borrar demo
               </button>
             </>
           )}
@@ -627,7 +788,7 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
             <p>{permissionError ? "No tienes permisos para ver estos datos." : t.noData}</p>
             {!readOnly && (
               <div className="mt-4 flex items-center justify-center gap-3">
-                <button onClick={populateDemoData} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition">{t.generateDemo}</button>
+                <button onClick={() => setShowDemoModal(true)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition">{t.generateDemo}</button>
                 <button onClick={deleteDemoData} className="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-500 transition">Borrar demo</button>
               </div>
             )}
