@@ -61,6 +61,15 @@ export interface DemoSeedConfig {
   includeClinicalMetrics?: ClinicalMetricKey[];
 }
 
+export interface DemoSeedResult {
+  success: boolean;
+  error?: string;
+  startKey?: string;
+  endKey?: string;
+  daysGenerated?: number;
+  targetUid?: string;
+}
+
 const removeUndefinedFields = <T>(value: T): T => {
   if (Array.isArray(value)) {
     return value
@@ -212,7 +221,7 @@ const generateRandomLog = (dateStr: string, isHighPerformer: boolean): DailyLog 
 export const seedDemoUsers = async (
   targetUid?: string,
   config: DemoSeedConfig = {}
-): Promise<{success: boolean, error?: string}> => {
+): Promise<DemoSeedResult> => {
   if (!db || !auth) {
     return { success: false, error: "Database not initialized" };
   }
@@ -275,7 +284,7 @@ export const seedDemoUsers = async (
       const evolvingMetrics = Boolean(config.evolvingMetrics);
 
       const buildGoals = () => {
-        const completed = rnd(0, goalsCount);
+        const completed = consistentAlways ? goalsCount : rnd(0, goalsCount);
         const all = Array.from({ length: goalsCount }, (_, i) => ({
           tarea: `Objetivo ${i + 1}`,
           categoria: 'General',
@@ -291,7 +300,7 @@ export const seedDemoUsers = async (
         ? pickOne(REFLECTIONS_DEMO_2)
         : '';
 
-      const { startDate, endDate } = getLastMonthsDateRange(cfgMonths);
+      const { startDate, endDate, startKey, endKey } = getLastMonthsDateRange(cfgMonths);
       const generatedDateKeys = listDateKeysInRange(startDate, endDate);
       const totalDays = generatedDateKeys.length;
 
@@ -370,7 +379,13 @@ export const seedDemoUsers = async (
 
       await commitAndResetBatch();
       await persistUserClinicalMetrics(targetUid, Array.from(selectedClinicalMetrics));
-      return { success: true };
+      return {
+        success: true,
+        startKey,
+        endKey,
+        daysGenerated: totalDays,
+        targetUid,
+      };
     } catch (error: unknown) {
       const code = typeof error === 'object' && error !== null && 'code' in error
         ? String((error as { code?: string }).code)
