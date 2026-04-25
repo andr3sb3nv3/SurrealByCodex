@@ -82,6 +82,12 @@ const commitBatchWithRetry = async (
   }
 };
 
+const toBoundedInt = (value: unknown, fallback: number, min: number, max: number): number => {
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(n)));
+};
+
 const DEMO_1_META = {
   uid: DEMO_1_UID,
   displayName: 'Usuario Demo 1',
@@ -298,7 +304,10 @@ export const seedDemoUsers = async (
         const recent = generatedDates.length > 1 ? idx / (generatedDates.length - 1) : 1;
         const dow = d.getDay();
 
-        if (chance(omitProbability)) continue;
+        // Siempre guardamos el día más reciente para que el histórico
+        // de "últimos X meses" tenga ancla en la fecha actual.
+        const isLatestDay = idx === generatedDates.length - 1;
+        if (!isLatestDay && chance(omitProbability)) continue;
 
         const log = generateRandomLog(dateStr, consistentAlways);
         const goalsProgress = buildGoals();
