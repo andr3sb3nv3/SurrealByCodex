@@ -388,6 +388,7 @@ export const seedDemoData = onCall(
     region: 'us-central1',
     timeoutSeconds: 540,
     memory: '512MiB',
+    invoker: 'public',
   },
   async (request: CallableRequest<SeedDemoDataInput>) => {
     const input = (request.data ?? {}) as SeedDemoDataInput;
@@ -395,6 +396,10 @@ export const seedDemoData = onCall(
 
     if (!targetUid || !TARGETED_DEMO_UIDS.includes(targetUid as typeof TARGETED_DEMO_UIDS[number])) {
       throw new HttpsError('invalid-argument', 'Demo inválido. Sólo se pueden generar demos 4, 5 y 6.');
+    }
+
+    if (request.auth?.uid !== targetUid) {
+      throw new HttpsError('permission-denied', 'Sólo el demo activo puede generar sus propios datos.');
     }
 
     const months = toBoundedInt(input.months, 6, 1, 24);
