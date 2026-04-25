@@ -2,6 +2,7 @@ import React from 'react';
 import { User } from 'firebase/auth';
 import { Loader2, Database, MessageSquare } from 'lucide-react';
 import { Language } from '../../types';
+import { isDateKeyWithinLastDays, parseDateKeyLocal } from '../../utils/dateUtils';
 
 export interface ChartColors {
   grid: string;
@@ -37,14 +38,13 @@ export const CLINICAL_COLLECTIONS = {
 export const pickLang = (language: Language): 'es' | 'en' => (language === 'es' ? 'es' : 'en');
 
 export const friendlyDate = (dateKey: string, language: Language): string =>
-  new Date(dateKey + 'T12:00:00').toLocaleDateString(
+  (parseDateKeyLocal(dateKey) ?? new Date(dateKey + 'T12:00:00')).toLocaleDateString(
     language === 'es' ? 'es-AR' : 'en-US',
     { weekday: 'short', day: 'numeric', month: 'short' }
   );
 
 export const inRange = (dateKey: string, rangeDays: RangeDays): boolean => {
-  const cutoff = Date.now() - rangeDays * 86400000;
-  return new Date(dateKey + 'T12:00:00').getTime() >= cutoff;
+  return isDateKeyWithinLastDays(dateKey, rangeDays);
 };
 
 export const buildTooltipStyle = (cc: ChartColors): React.CSSProperties => ({

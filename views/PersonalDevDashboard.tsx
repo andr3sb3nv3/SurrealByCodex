@@ -10,7 +10,7 @@ import { db } from '../services/firebase';
 import CompanyHeader from '../components/CompanyHeader';
 import Card from '../components/ui/Card';
 import HistoricalMetricView from '../components/HistoricalMetricView';
-import { getMonthName, formatDateFriendly } from '../utils/dateUtils';
+import { getMonthName, formatDateFriendly, isDateKey, isDateKeyWithinLastDays, parseDateKeyLocal } from '../utils/dateUtils';
 import { DashboardProps, DailyLog } from '../types';
 import { seedDemoUsers, clearTargetedDemoUserData, type DemoSeedConfig } from '../utils/seedDemoData';
 import { TRANSLATIONS } from '../translations';
@@ -211,6 +211,14 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
       const historyData: DashboardDataPoint[] = [];
       snapshot.forEach(doc => {
         const log = doc.data() as DashboardDataPoint;
+        const fecha = isDateKey(log.fecha)
+          ? log.fecha
+          : doc.id;
+        if (!isDateKey(fecha)) return;
+        log.fecha = fecha;
+        if (typeof log.timestamp !== 'number') {
+          log.timestamp = parseDateKeyLocal(fecha)?.getTime() ?? Date.now();
+        }
         // Normalizamos legacy 0-100 → 1-10 para que charts y stats sean consistentes.
         for (const f of METRIC_FIELDS) {
           const v = log[f];
@@ -253,7 +261,7 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
           const entry = clinicalDoc.data() as Record<string, unknown>;
           const dateKey = (entry.dateKey as string | undefined) || clinicalDoc.id;
           const raw = entry[metric.sourceField];
-          if (typeof dateKey !== 'string' || typeof raw !== 'number') return;
+          if (!isDateKey(dateKey) || typeof raw !== 'number') return;
 
           const normalized = Math.max(0, Math.min(10, Math.round(metric.toScale10(raw) * 10) / 10));
           const existing = rowsByDate.get(dateKey);
@@ -263,7 +271,7 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
       });
 
       const mergedData = Array.from(rowsByDate.values());
-      mergedData.sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+      mergedData.sort((a, b) => a.fecha.localeCompare(b.fecha));
       setRawData(mergedData);
       
       const months = [...new Set(mergedData.map(d => getMonthName(d.fecha, language)))];
@@ -448,12 +456,9 @@ const PersonalDevDashboard: React.FC<DashboardProps> = ({
         // Use locally cached rawData
         // Filter for last 30 days
         const today = new Date();
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(today.getDate() - 30);
         
         const recentLogs = rawData.filter(log => {
-            const logDate = new Date(log.fecha);
-            return logDate >= thirtyDaysAgo;
+            return isDateKeyWithinLastDays(log.fecha, 30, today);
         });
 
         if (recentLogs.length === 0) {

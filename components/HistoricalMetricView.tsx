@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { X, Calendar, Target, Quote, TrendingUp } from 'lucide-react';
 import { AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { DailyLog } from '../types';
+import { getLastMonthsDateRange, isDateKeyInRange, parseDateKeyLocal } from '../utils/dateUtils';
 
 export interface HistoricalMetricDef {
   key: string;
@@ -47,7 +48,6 @@ interface Props {
 
 type RangeMonths = 3 | 6 | 12;
 type MetricLog = DailyLog & Record<string, unknown>;
-const parseDateKey = (dateKey: string): Date => new Date(`${dateKey}T12:00:00`);
 const getMetricValue = (log: DailyLog, field: string): number | null => {
   const value = (log as MetricLog)[field];
   return typeof value === 'number' && !Number.isNaN(value) ? value : null;
@@ -72,20 +72,14 @@ const HistoricalMetricView: React.FC<Props> = ({
   const filteredData = useMemo(() => {
     if (!currentMetric) return [];
     const field = currentMetric.dbField as string;
+    const { startKey, endKey } = getLastMonthsDateRange(range);
     const withValues = rawData
       .filter(log => {
-        return getMetricValue(log, field) !== null;
+        return getMetricValue(log, field) !== null && isDateKeyInRange(log.fecha, startKey, endKey);
       })
-      .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
-    if (withValues.length === 0) return [];
+      .sort((a, b) => a.fecha.localeCompare(b.fecha));
 
-    // Usamos como referencia la última fecha con datos para mantener consistencia
-    // entre rangos (3 meses ⊂ 6 meses ⊂ 12 meses).
-    const endDate = parseDateKey(withValues[withValues.length - 1].fecha);
-    const cutoff = new Date(endDate);
-    cutoff.setMonth(cutoff.getMonth() - range);
-
-    return withValues.filter(log => parseDateKey(log.fecha).getTime() >= cutoff.getTime());
+    return withValues;
   }, [rawData, currentMetric, range]);
 
   const average = useMemo(() => {
@@ -293,7 +287,7 @@ const DayDetailModal: React.FC<DayDetailProps> = ({ log, metrics, labels, highli
               <Calendar size={12} /> {log.fecha}
             </p>
             <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">
-              {new Date(log.fecha + 'T12:00:00').toLocaleDateString(undefined, {
+              {(parseDateKeyLocal(log.fecha) ?? new Date(log.fecha + 'T12:00:00')).toLocaleDateString(undefined, {
                 weekday: 'long',
                 day: 'numeric',
                 month: 'long',
