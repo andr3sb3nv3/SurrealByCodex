@@ -47,6 +47,7 @@ interface Props {
 
 type RangeMonths = 3 | 6 | 12;
 type MetricLog = DailyLog & Record<string, unknown>;
+const parseDateKey = (dateKey: string): Date => new Date(`${dateKey}T12:00:00`);
 const getMetricValue = (log: DailyLog, field: string): number | null => {
   const value = (log as MetricLog)[field];
   return typeof value === 'number' && !Number.isNaN(value) ? value : null;
@@ -70,16 +71,20 @@ const HistoricalMetricView: React.FC<Props> = ({
 
   const filteredData = useMemo(() => {
     if (!currentMetric) return [];
-    const cutoff = new Date();
-    cutoff.setHours(0, 0, 0, 0);
-    cutoff.setMonth(cutoff.getMonth() - range);
     const field = currentMetric.dbField as string;
-    return rawData
-      .filter(log => new Date(log.fecha).getTime() >= cutoff.getTime())
+    const withValues = rawData
       .filter(log => {
         return getMetricValue(log, field) !== null;
       })
       .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+    if (withValues.length === 0) return [];
+
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    const cutoff = new Date(today);
+    cutoff.setMonth(cutoff.getMonth() - range);
+
+    return withValues.filter(log => parseDateKey(log.fecha).getTime() >= cutoff.getTime());
   }, [rawData, currentMetric, range]);
 
   const average = useMemo(() => {

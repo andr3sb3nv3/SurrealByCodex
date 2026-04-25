@@ -1,8 +1,14 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { User } from 'firebase/auth';
 import { Stethoscope, Lock } from 'lucide-react';
-import { parseEnabledModules, MODULE_COMPONENTS } from '../utils/patologiaModules';
+import { MODULE_COMPONENTS, MODULE_MAPPING } from '../utils/patologiaModules';
 import { Language } from '../types';
+import {
+  CLINICAL_METRIC_TO_MODULE_ID,
+  getClinicalSeverityFromIdentifiers,
+  resolveUserClinicalMetrics,
+  type ClinicalMetricKey,
+} from '../utils/clinicalMetricsConfig';
 
 interface Props {
   user: User;
@@ -29,9 +35,40 @@ const severityClasses = (s: number) => {
 };
 
 const PatologiaSection: React.FC<Props> = ({ user, dateKey, readOnly, language }) => {
+  const [enabledModuleIds, setEnabledModuleIds] = useState<string[]>([]);
+  const metricByModuleId = useMemo(() => {
+    const map = new Map<string, ClinicalMetricKey>();
+    (Object.keys(CLINICAL_METRIC_TO_MODULE_ID) as ClinicalMetricKey[]).forEach((metric) => {
+      map.set(CLINICAL_METRIC_TO_MODULE_ID[metric], metric);
+    });
+    return map;
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    resolveUserClinicalMetrics(user.uid, [user.displayName, user.email, user.uid])
+      .then((metrics) => {
+        if (!alive) return;
+        setEnabledModuleIds(metrics.map((metric) => CLINICAL_METRIC_TO_MODULE_ID[metric]));
+      })
+      .catch(() => {
+        if (!alive) return;
+        setEnabledModuleIds([]);
+      });
+    return () => { alive = false; };
+  }, [user.displayName, user.email, user.uid]);
+
   const enabled = useMemo(
-    () => parseEnabledModules([user.displayName, user.email, user.uid]),
-    [user.displayName, user.email, user.uid]
+    () => MODULE_MAPPING
+      .filter((mod) => enabledModuleIds.includes(mod.id))
+      .map((mod) => {
+        const metric = metricByModuleId.get(mod.id);
+        const severity = metric
+          ? getClinicalSeverityFromIdentifiers([user.displayName, user.email, user.uid], metric)
+          : 5;
+        return { ...mod, severity };
+      }),
+    [enabledModuleIds, metricByModuleId, user.displayName, user.email, user.uid]
   );
 
   if (enabled.length === 0) return null;

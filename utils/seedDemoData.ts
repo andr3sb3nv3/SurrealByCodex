@@ -1,9 +1,13 @@
 import { writeBatch, doc, getDoc } from 'firebase/firestore';
 import type { DocumentReference } from 'firebase/firestore';
-import { writeBatch, doc, getDoc, DocumentReference } from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth } from '../services/firebase';
 import { DailyLog } from '../types';
+import {
+  DEFAULT_CLINICAL_METRICS,
+  persistUserClinicalMetrics,
+  type ClinicalMetricKey,
+} from './clinicalMetricsConfig';
 export { clearTargetedDemoUserData } from './clearDemoData';
 
 // UIDs deben coincidir con los definidos en App.tsx
@@ -18,6 +22,71 @@ const DEMO_5_UID = 'DemoMetricas1111111111';
 // los 10 módulos clínicos y mantener paridad con Demo 5.
 const DEMO_6_UID = 'DemoMetricas2222222222';
 const TARGETED_DEMO_UIDS = [DEMO_4_UID, DEMO_5_UID, DEMO_6_UID] as const;
+const DEFAULT_DAILY_METRICS: DailyMetricKey[] = [
+  'estado_animo',
+  'nivel_energia',
+  'nivel_deporte',
+  'calidad_sueno',
+  'social_confort',
+  'nivel_motivacion',
+  'nivel_concentracion',
+  'regulacion_emocional',
+];
+type DailyMetricKey = keyof Pick<DailyLog,
+  'estado_animo' | 'nivel_energia' | 'nivel_deporte' | 'calidad_sueno' |
+  'social_confort' | 'nivel_motivacion' | 'nivel_concentracion' | 'regulacion_emocional'
+>;
+
+export interface DemoSeedConfig {
+  months?: number;
+  consistency?: 'inconsistent' | 'always';
+  includeDailyMetrics?: DailyMetricKey[];
+  evolvingMetrics?: boolean;
+  dailyGoalsCount?: number;
+  includeClinicalMetrics?: ClinicalMetricKey[];
+}
+
+const removeUndefinedFields = <T>(value: T): T => {
+  if (Array.isArray(value)) {
+    return value
+      .filter((item) => item !== undefined)
+      .map((item) => removeUndefinedFields(item)) as T;
+  }
+  if (value && typeof value === 'object') {
+    const cleaned = Object.entries(value as Record<string, unknown>).reduce<Record<string, unknown>>((acc, [key, val]) => {
+      if (val === undefined) return acc;
+      acc[key] = removeUndefinedFields(val);
+      return acc;
+    }, {});
+    return cleaned as T;
+  }
+  return value;
+};
+
+const commitBatchWithRetry = async (
+  commit: () => Promise<void>,
+  maxRetries = 3
+): Promise<void> => {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      await commit();
+      return;
+    } catch (error: unknown) {
+      const code = typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: string }).code)
+        : '';
+      const transient = ['aborted', 'unavailable', 'deadline-exceeded'].includes(code);
+      if (!transient || attempt === maxRetries) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
+    }
+  }
+};
+
+const toBoundedInt = (value: unknown, fallback: number, min: number, max: number): number => {
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(n)));
+};
 
 const DEMO_1_META = {
   uid: DEMO_1_UID,
@@ -125,7 +194,10 @@ const generateRandomLog = (dateStr: string, isHighPerformer: boolean): DailyLog 
   };
 };
 
-export const seedDemoUsers = async (targetUid?: string): Promise<{success: boolean, error?: string}> => {
+export const seedDemoUsers = async (
+  targetUid?: string,
+  config: DemoSeedConfig = {}
+): Promise<{success: boolean, error?: string}> => {
   if (!db || !auth) {
     return { success: false, error: "Database not initialized" };
   }
@@ -164,20 +236,30 @@ export const seedDemoUsers = async (targetUid?: string): Promise<{success: boole
       let opCount = 0;
       const commitAndResetBatch = async () => {
         if (opCount > 0) {
-          await batch.commit();
+          await commitBatchWithRetry(() => batch.commit());
           batch = writeBatch(db);
           opCount = 0;
         }
       };
       const addToBatch = async (ref: DocumentReference, data: object) => {
-        batch.set(ref, data);
+        batch.set(ref, removeUndefinedFields(data));
         opCount++;
         if (opCount >= 450) await commitAndResetBatch();
       };
 
-      const buildThreeGoals = () => {
-        const completed = rnd(0, 3);
-        const all = goalsData.goals.map(g => ({ tarea: g.text, categoria: g.category }));
+      const cfgMonths = toBoundedInt(config.months, 6, 1, 24);
+      const goalsCount = toBoundedInt(config.dailyGoalsCount, 3, 1, 10);
+      const selectedDailyMetrics = new Set<DailyMetricKey>((config.includeDailyMetrics?.length ? config.includeDailyMetrics : DEFAULT_DAILY_METRICS));
+      const selectedClinicalMetrics = new Set<ClinicalMetricKey>((config.includeClinicalMetrics?.length ? config.includeClinicalMetrics : DEFAULT_CLINICAL_METRICS));
+      const consistentAlways = (config.consistency ?? 'inconsistent') === 'always';
+      const evolvingMetrics = Boolean(config.evolvingMetrics);
+
+      const buildGoals = () => {
+        const completed = rnd(0, goalsCount);
+        const all = Array.from({ length: goalsCount }, (_, i) => ({
+          tarea: `Objetivo ${i + 1}`,
+          categoria: 'General',
+        }));
         return {
           completed,
           objetivos_completados: all.slice(0, completed),
@@ -189,61 +271,90 @@ export const seedDemoUsers = async (targetUid?: string): Promise<{success: boole
         ? pickOne(REFLECTIONS_DEMO_2)
         : '';
 
-      const days = targetUid === DEMO_4_UID ? 90 : 365;
-      const omitProbability = targetUid === DEMO_5_UID ? 0.35 : 0; // Demo 5 imperfecto
+      const omitProbability = consistentAlways ? 0 : 0.35;
       const today = new Date();
       today.setHours(12, 0, 0, 0);
+      const startDate = new Date(today);
+      startDate.setMonth(startDate.getMonth() - cfgMonths);
+      const generatedDates: Date[] = [];
+      for (const iter = new Date(startDate); iter <= today; iter.setDate(iter.getDate() + 1)) {
+        generatedDates.push(new Date(iter));
+      }
+      const totalDays = generatedDates.length;
 
       await addToBatch(doc(db, 'users', targetUid), {
         uid: targetUid,
         displayName: currentMeta.displayName,
         email: currentMeta.email,
-        createdAt: new Date(Date.now() - days * 86400000).toISOString(),
+        createdAt: new Date(Date.now() - totalDays * 86400000).toISOString(),
         photoURL: null,
-        isDemo: true
+        isDemo: true,
+        clinicalMetrics: Array.from(selectedClinicalMetrics),
+      });
+      await addToBatch(doc(db, 'users', targetUid, 'settings', 'clinicalMetrics'), {
+        clinicalMetrics: Array.from(selectedClinicalMetrics),
+        updatedAt: Date.now(),
       });
       await addToBatch(doc(db, 'users', targetUid, 'Set_goals', 'current'), goalsData);
 
-      for (let back = days - 1; back >= 0; back--) {
-        const d = new Date(today);
-        d.setDate(today.getDate() - back);
+      for (let idx = 0; idx < generatedDates.length; idx++) {
+        const d = generatedDates[idx];
+        const back = generatedDates.length - idx - 1;
         const dateStr = d.toISOString().split('T')[0];
-        const recent = 1 - (back / Math.max(days, 1));
+        const recent = generatedDates.length > 1 ? idx / (generatedDates.length - 1) : 1;
         const dow = d.getDay();
 
-        if (chance(omitProbability)) continue;
+        // Siempre guardamos el día más reciente para que el histórico
+        // de "últimos X meses" tenga ancla en la fecha actual.
+        const isLatestDay = idx === generatedDates.length - 1;
+        if (!isLatestDay && chance(omitProbability)) continue;
 
-        const log = generateRandomLog(dateStr, targetUid !== DEMO_5_UID);
-        const goalsProgress = buildThreeGoals();
+        const log = generateRandomLog(dateStr, consistentAlways);
+        const goalsProgress = buildGoals();
         log.reflexion = maybeReflection();
-        log.audio_note = undefined;
         log.objetivos_completados = goalsProgress.objetivos_completados;
         log.objetivos_pendientes = goalsProgress.objetivos_pendientes;
-        log.progreso_porcentaje = Math.round((goalsProgress.completed / 3) * 100);
+        log.progreso_porcentaje = Math.round((goalsProgress.completed / goalsCount) * 100);
+
+        for (const metric of DEFAULT_DAILY_METRICS) {
+          if (!selectedDailyMetrics.has(metric)) {
+            delete log[metric];
+          }
+        }
+        if (evolvingMetrics) {
+          const drift = Math.round((recent - 0.5) * 2);
+          for (const metric of DEFAULT_DAILY_METRICS) {
+            const current = log[metric];
+            if (typeof current !== 'number') continue;
+            log[metric] = clamp(current + drift, 1, 10);
+          }
+        }
 
         await addToBatch(doc(db, 'users', targetUid, 'daily_logs', dateStr), log);
 
-        if (targetUid === DEMO_4_UID || targetUid === DEMO_6_UID) {
-          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsDepression', dateStr), genDepressionDay(dateStr, recent, dow));
-          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsBipolar', dateStr), genBipolarDay(dateStr, back));
-        }
-
-        if (targetUid === DEMO_5_UID || targetUid === DEMO_6_UID) {
-          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsSchizophrenia', dateStr), genSchizoDay(dateStr, recent));
-          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsSubstance', dateStr), genSubstanceDay(dateStr, recent));
-        }
-
-        if (targetUid === DEMO_6_UID) {
-          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsAnxiety', dateStr), genAnxietyDay(dateStr, recent, dow));
-          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsOCD', dateStr), genOCDDay(dateStr, recent));
-          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsTrauma', dateStr), genTraumaDay(dateStr, recent));
-          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsSleep', dateStr), genSleepDay(dateStr, dow));
-          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsPersonality', dateStr), genPersonalityDay(dateStr, recent));
-          await addToBatch(doc(db, 'users', targetUid, 'deepClinicalLogsADHD', dateStr), genADHDDay(dateStr, recent, dow));
+        const clinicalFactories: Record<ClinicalMetricKey, { collection: string; data: object }> = {
+          anxiety: { collection: 'deepClinicalLogsAnxiety', data: genAnxietyDay(dateStr, recent, dow) },
+          depression: { collection: 'deepClinicalLogsDepression', data: genDepressionDay(dateStr, recent, dow) },
+          bipolar: { collection: 'deepClinicalLogsBipolar', data: genBipolarDay(dateStr, back) },
+          schizophrenia: { collection: 'deepClinicalLogsSchizophrenia', data: genSchizoDay(dateStr, recent) },
+          ocd: { collection: 'deepClinicalLogsOCD', data: genOCDDay(dateStr, recent) },
+          trauma: { collection: 'deepClinicalLogsTrauma', data: genTraumaDay(dateStr, recent) },
+          sleep: { collection: 'deepClinicalLogsSleep', data: genSleepDay(dateStr, dow) },
+          personality: { collection: 'deepClinicalLogsPersonality', data: genPersonalityDay(dateStr, recent) },
+          adhd: { collection: 'deepClinicalLogsADHD', data: genADHDDay(dateStr, recent, dow) },
+          substance: { collection: 'deepClinicalLogsSubstance', data: genSubstanceDay(dateStr, recent) },
+        };
+        for (const metric of selectedClinicalMetrics) {
+          const clinical = clinicalFactories[metric];
+          await addToBatch(
+            doc(db, 'users', targetUid, clinical.collection, dateStr),
+            clinical.data
+          );
         }
       }
 
       await commitAndResetBatch();
+      await persistUserClinicalMetrics(targetUid, Array.from(selectedClinicalMetrics));
       return { success: true };
     } catch (error: unknown) {
       const code = typeof error === 'object' && error !== null && 'code' in error
@@ -267,14 +378,14 @@ export const seedDemoUsers = async (targetUid?: string): Promise<{success: boole
 
     const commitAndResetBatch = async () => {
         if (opCount > 0) {
-            await batch.commit();
+            await commitBatchWithRetry(() => batch.commit());
             batch = writeBatch(db);
             opCount = 0;
         }
     };
 
     const addToBatch = async (ref: DocumentReference, data: object) => {
-        batch.set(ref, data);
+        batch.set(ref, removeUndefinedFields(data));
         opCount++;
         if (opCount >= 450) { // Margen de seguridad antes de 500
             await commitAndResetBatch();
