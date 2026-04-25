@@ -398,8 +398,8 @@ export const seedDemoData = onCall(
       throw new HttpsError('invalid-argument', 'Demo inválido. Sólo se pueden generar demos 4, 5 y 6.');
     }
 
-    if (request.auth?.uid !== targetUid) {
-      throw new HttpsError('permission-denied', 'Sólo el demo activo puede generar sus propios datos.');
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Debes iniciar sesión para generar datos demo.');
     }
 
     const months = toBoundedInt(input.months, 6, 1, 24);
