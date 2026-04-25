@@ -265,16 +265,22 @@ export const seedDemoUsers = async (
         ? pickOne(REFLECTIONS_DEMO_2)
         : '';
 
-      const days = cfgMonths * 30;
       const omitProbability = consistentAlways ? 0 : 0.35;
       const today = new Date();
       today.setHours(12, 0, 0, 0);
+      const startDate = new Date(today);
+      startDate.setMonth(startDate.getMonth() - cfgMonths);
+      const generatedDates: Date[] = [];
+      for (const iter = new Date(startDate); iter <= today; iter.setDate(iter.getDate() + 1)) {
+        generatedDates.push(new Date(iter));
+      }
+      const totalDays = generatedDates.length;
 
       await addToBatch(doc(db, 'users', targetUid), {
         uid: targetUid,
         displayName: currentMeta.displayName,
         email: currentMeta.email,
-        createdAt: new Date(Date.now() - days * 86400000).toISOString(),
+        createdAt: new Date(Date.now() - totalDays * 86400000).toISOString(),
         photoURL: null,
         isDemo: true,
         clinicalMetrics: Array.from(selectedClinicalMetrics),
@@ -285,11 +291,11 @@ export const seedDemoUsers = async (
       });
       await addToBatch(doc(db, 'users', targetUid, 'Set_goals', 'current'), goalsData);
 
-      for (let back = days - 1; back >= 0; back--) {
-        const d = new Date(today);
-        d.setDate(today.getDate() - back);
+      for (let idx = 0; idx < generatedDates.length; idx++) {
+        const d = generatedDates[idx];
+        const back = generatedDates.length - idx - 1;
         const dateStr = d.toISOString().split('T')[0];
-        const recent = 1 - (back / Math.max(days, 1));
+        const recent = generatedDates.length > 1 ? idx / (generatedDates.length - 1) : 1;
         const dow = d.getDay();
 
         if (chance(omitProbability)) continue;
