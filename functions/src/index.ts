@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { DocumentReference, getFirestore } from 'firebase-admin/firestore';
-import { CallableRequest, HttpsError, onCall } from 'firebase-functions/v2/https';
+import { DocumentReference, FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { CallableRequest, HttpsError, onCall, onRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import nodemailer from 'nodemailer';
 
@@ -15,6 +15,77 @@ const mailPass = defineSecret('MAIL_PASS');
 const mailFrom = defineSecret('MAIL_FROM');
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const checkinApiKey = defineSecret('CHECKIN_API_KEY');
+
+type MetricMap = Record<string, number | null>;
+type GoalsMap = Record<string, boolean | null>;
+
+interface CheckinRequestBody {
+  user_id?: string;
+  fecha?: string;
+  metrics?: MetricMap;
+  goals?: GoalsMap;
+  reflection?: string;
+  summary?: {
+    positive?: string;
+    challenge?: string;
+    next_step?: string;
+    mood_note?: string;
+  } | null;
+  source?: string;
+}
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const sanitizeMetrics = (input: unknown): MetricMap => {
+  if (!isPlainObject(input)) {
+    throw new HttpsError('invalid-argument', 'metrics debe ser un objeto.');
+  }
+  const output: MetricMap = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (value === null) {
+      output[key] = null;
+      continue;
+    }
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 1 || value > 10) {
+      throw new HttpsError('invalid-argument', `La métrica "${key}" debe ser number entre 1 y 10, o null.`);
+    }
+    output[key] = value;
+  }
+  return output;
+};
+
+const sanitizeGoals = (input: unknown): GoalsMap | null => {
+  if (input === undefined || input === null) return null;
+  if (!isPlainObject(input)) {
+    throw new HttpsError('invalid-argument', 'goals debe ser un objeto dinámico.');
+  }
+  const output: GoalsMap = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (value === null || typeof value === 'boolean') {
+      output[key] = value;
+      continue;
+    }
+    throw new HttpsError('invalid-argument', `El goal "${key}" debe ser boolean o null.`);
+  }
+  return output;
+};
+
+const sanitizeSummary = (input: unknown): CheckinRequestBody['summary'] => {
+  if (input === undefined || input === null) return null;
+  if (!isPlainObject(input)) {
+    throw new HttpsError('invalid-argument', 'summary debe ser un objeto.');
+  }
+  const safeSummary = {
+    positive: typeof input.positive === 'string' ? input.positive : '',
+    challenge: typeof input.challenge === 'string' ? input.challenge : '',
+    next_step: typeof input.next_step === 'string' ? input.next_step : '',
+    mood_note: typeof input.mood_note === 'string' ? input.mood_note : '',
+  };
+  return safeSummary;
+};
 
 type DailyMetricKey =
   | 'estado_animo'
@@ -380,6 +451,75 @@ export const requestPasswordRecovery = onCall(
       ok: true,
       message: 'Te enviamos un email para restablecer tu contraseña.',
     };
+  }
+);
+
+export const checkin = onRequest(
+  {
+    region: 'us-central1',
+    invoker: 'public',
+    secrets: [checkinApiKey],
+  },
+  async (req, res) => {
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method Not Allowed' });
+      return;
+    }
+
+    const authHeader = req.get('authorization') ?? '';
+    const expected = `Bearer ${checkinApiKey.value()}`;
+    if (authHeader !== expected) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    try {
+      const body = (req.body ?? {}) as CheckinRequestBody;
+      const userId = typeof body.user_id === 'string' ? body.user_id.trim() : '';
+      const fecha = typeof body.fecha === 'string' ? body.fecha.trim() : '';
+      const reflection = typeof body.reflection === 'string' ? body.reflection : '';
+
+      if (!userId) {
+        throw new HttpsError('invalid-argument', 'user_id es obligatorio.');
+      }
+      if (!fecha || !DATE_REGEX.test(fecha)) {
+        throw new HttpsError('invalid-argument', 'fecha es obligatoria con formato YYYY-MM-DD.');
+      }
+      if (body.source !== 'chatgpt') {
+        throw new HttpsError('invalid-argument', 'source debe ser "chatgpt".');
+      }
+
+      const metrics = sanitizeMetrics(body.metrics);
+      const goals = sanitizeGoals(body.goals);
+      const summary = sanitizeSummary(body.summary);
+
+      const payload: Record<string, unknown> = {
+        user_id: userId,
+        fecha,
+        metrics,
+        reflection,
+        source: 'chatgpt',
+        updated_at: FieldValue.serverTimestamp(),
+      };
+
+      if (goals !== null) payload.goals = goals;
+      if (summary !== null) payload.summary = summary;
+
+      const docRef = getFirestore().doc(`users/${userId}/daily_logs/${fecha}`);
+      const existing = await docRef.get();
+      if (!existing.exists) {
+        payload.created_at = FieldValue.serverTimestamp();
+      }
+
+      await docRef.set(payload, { merge: true });
+      res.status(200).json({ ok: true, path: docRef.path });
+    } catch (error: unknown) {
+      if (error instanceof HttpsError) {
+        res.status(400).json({ error: error.message });
+        return;
+      }
+      res.status(500).json({ error: 'Internal server error' });
+    }
   }
 );
 
