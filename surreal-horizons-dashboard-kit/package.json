@@ -1,0 +1,30 @@
+{
+  "name": "surreal-horizons-dashboard-kit",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 1011",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 1012",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@google/genai": "latest",
+    "@vitejs/plugin-react": "^5.0.0",
+    "crypto-js": "4.2.0",
+    "firebase": "^12.6.0",
+    "lucide-react": "^0.555.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "recharts": "^3.5.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@types/crypto-js": "^4.2.2"
+  }
+}
